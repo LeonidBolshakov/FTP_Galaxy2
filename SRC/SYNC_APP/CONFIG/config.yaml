@@ -1,0 +1,15 @@
+ftp_host: "ftp.galaktika.ru"
+ftp_user: "/pub/support/galaktika/bug_fix/GAL910/UPDATES/"
+ftp_root: "/"
+ftp_timout_sec: 5
+
+# ВАЖНО: для Windows путей нужны одинарные кавычки
+local_root: 'C:\Дистрибутив\PREPARE\'
+
+logging:
+  console:
+    level: "INFO"
+  file:
+    level: "DEBUG"
+    path: "sync.log"
+    rotation: "1 MB"

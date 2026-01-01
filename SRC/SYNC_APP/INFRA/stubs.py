@@ -1,26 +1,24 @@
 # stubs.py
 from loguru import logger
 
-from SRC.SYNC_APP.app.dto import (
-    RuntimeContext,
+from SRC.SYNC_APP.APP.dto import (
     RepositorySnapshot,
-    SnapshotMode,
     DiffInput,
     DiffPlan,
     TransferInput,
     ErrorEvent,
-    ExecutionChoice,
+    SnapshotInput,
+    ValidateRepositoryInput,
 )
 
 
-class AlwaysRunPolicy:
-    def run(self, ctx: RuntimeContext) -> ExecutionChoice:
-        return ExecutionChoice.RUN
-
-
 class EmptySnapshotService:
-    def run(self, mode: SnapshotMode) -> RepositorySnapshot:
-        logger.debug("Snapshot mode: {}", mode)
+    def local(self, data: SnapshotInput) -> RepositorySnapshot:
+        logger.debug("Snapshot mode: local")
+        return RepositorySnapshot(files={})
+
+    def remote(self, data: SnapshotInput) -> RepositorySnapshot:
+        logger.debug("Snapshot mode: remote")
         return RepositorySnapshot(files={})
 
 
@@ -32,6 +30,11 @@ class EmptyDiffPlanner:
 class TransferService:
     def run(self, data: TransferInput) -> None:
         logger.info("Transfer {}: {} file(s)", data.mode, len(data.paths))
+
+
+class EmptyRepositoryValidator:
+    def run(self, data: ValidateRepositoryInput):
+        logger.info(f"Validating repository {data.snapshot}")
 
 
 class LogErrorHandler:

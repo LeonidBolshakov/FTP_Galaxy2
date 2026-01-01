@@ -1,16 +1,16 @@
+from loguru import logger
+
 from SRC.SYNC_APP.CONFIG import config
 from SRC.SYNC_APP.CONFIG.config_CLI import parse_args
-from SRC.SYNC_APP.INFRA import setup_loguru
-
-from SRC.SYNC_APP.app.dto import RuntimeContext
-from SRC.SYNC_APP.app.controller import SyncController
-from SRC.SYNC_APP.app.repository_validator import RepositoryValidator
+from SRC.SYNC_APP.APP.dto import RuntimeContext, FTPListError, ConnectError
+from SRC.SYNC_APP.APP.controller import SyncController
+from SRC.SYNC_APP.APP.SERVICES.snapshot_service import SnapShotService
+from SRC.SYNC_APP.INFRA.executiongate import ExecutionGate
 from SRC.SYNC_APP.INFRA.stubs import (
-    AlwaysRunPolicy,
-    EmptySnapshotService,
     EmptyDiffPlanner,
     TransferService,
     LogErrorHandler,
+    EmptyRepositoryValidator,
 )
 
 
@@ -23,19 +23,21 @@ def main():
         raise SystemExit(2)
 
     runtime = RuntimeContext(app=app, once_per_day=args.once_per_day)
-    setup_loguru.setup(runtime)
 
     controller = SyncController(
         runtime_context=runtime,
-        snapshot_service=EmptySnapshotService(),
+        snapshot_service=SnapShotService(),
         diff_planner=EmptyDiffPlanner(),
         transfer_service=TransferService(),
-        repository_validator=RepositoryValidator(),
         error_handler=LogErrorHandler(),
-        execution_policy=AlwaysRunPolicy(),
+        execution_gate=ExecutionGate(),
+        repository_validator=EmptyRepositoryValidator(),
     )
 
-    controller.run()
+    try:
+        controller.run()
+    except (ConnectError, FTPListError) as e:
+        logger.error(f"Ошибка в начале работы с FTP сервером\n{e}")
 
 
 if __name__ == "__main__":

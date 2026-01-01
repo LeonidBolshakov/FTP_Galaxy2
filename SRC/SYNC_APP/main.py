@@ -5,9 +5,9 @@ from SRC.SYNC_APP.CONFIG.config_CLI import parse_args
 from SRC.SYNC_APP.APP.dto import RuntimeContext, FTPListError, ConnectError
 from SRC.SYNC_APP.APP.controller import SyncController
 from SRC.SYNC_APP.APP.SERVICES.snapshot_service import SnapShotService
+from SRC.SYNC_APP.APP.SERVICES.diff_planer import DiffPlaner
 from SRC.SYNC_APP.INFRA.executiongate import ExecutionGate
 from SRC.SYNC_APP.INFRA.stubs import (
-    EmptyDiffPlanner,
     TransferService,
     LogErrorHandler,
     EmptyRepositoryValidator,
@@ -27,7 +27,7 @@ def main():
     controller = SyncController(
         runtime_context=runtime,
         snapshot_service=SnapShotService(),
-        diff_planner=EmptyDiffPlanner(),
+        diff_planner=DiffPlaner(),
         transfer_service=TransferService(),
         error_handler=LogErrorHandler(),
         execution_gate=ExecutionGate(),

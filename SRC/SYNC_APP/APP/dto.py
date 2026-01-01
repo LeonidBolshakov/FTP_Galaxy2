@@ -48,17 +48,18 @@ class ModeSnapShop(Enum):
 @dataclass(frozen=True)
 class FileSnapshot:
     size                : int | None
-    file_hash           : str | None
+    md5_hash           : str | None
 
 
 @dataclass(frozen=True)
 class RepositorySnapshot:
     files               : dict[str, FileSnapshot]
 
-class ErrorNumber(Enum):
-    diff_files          = auto()
-    conflict_files      = auto()
 
+class ErrorNumber(Enum):
+    diff_pre_files      = auto()
+    diff_download_files = auto()
+    conflict_files      = auto()
 
 
 class TransferMode(Enum):

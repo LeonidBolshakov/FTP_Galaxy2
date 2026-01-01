@@ -45,7 +45,7 @@ class SnapShotService:
             ) from e
 
         files = {
-            items.remote_full: FileSnapshot(size=items.size, file_hash=items.md5_hash)
+            items.remote_full: FileSnapshot(size=items.size, md5_hash=items.md5_hash)
             for items in items
         }
 

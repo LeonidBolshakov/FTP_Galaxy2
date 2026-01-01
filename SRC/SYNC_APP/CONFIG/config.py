@@ -60,7 +60,7 @@ class AppConfig(BaseSettings):
     path_old                        : Path                          = Path("OLD")
 
     # Поведение
-    verify_mode                     : Literal["size", "file_hash"]  = "file_hash"
+    verify_mode                     : Literal["size", "md5_hash"]  = "md5_hash"
     conflict_policy                 : Literal["FAIL", "WARN"]       = "FAIL"
 
     # Служебные файлы

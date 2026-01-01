@@ -57,6 +57,15 @@ class SyncController:
             DiffInput(self.runtime_context, local_before, remote_before)
         )
 
+        if pre_plan.diff_files:
+            self.error_handler.run(
+                ErrorEvent(
+                    self.runtime_context,
+                    ErrorNumber.diff_pre_files,
+                    pre_plan.diff_files,
+                )
+            )
+
         self.transfer_service.run(
             TransferInput(self.runtime_context, TransferMode.delete, pre_plan.to_delete)
         )
@@ -80,7 +89,9 @@ class SyncController:
         if post_plan.diff_files:
             self.error_handler.run(
                 ErrorEvent(
-                    self.runtime_context, ErrorNumber.diff_files, post_plan.diff_files
+                    self.runtime_context,
+                    ErrorNumber.diff_download_files,
+                    post_plan.diff_files,
                 )
             )
 

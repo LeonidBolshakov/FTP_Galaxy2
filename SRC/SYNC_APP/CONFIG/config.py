@@ -1,7 +1,14 @@
 from pathlib import Path
-from typing import Optional, Literal
+from typing import Literal, cast, Self
 
-from pydantic import BaseModel, ValidationError
+from pydantic import (
+    BaseModel,
+    ValidationError,
+    model_validator,
+    PositiveInt,
+    PositiveFloat,
+)
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 import yaml
 
@@ -19,13 +26,13 @@ class ConsoleLoggingConfig(BaseModel):
 class FileLoggingConfig(BaseModel):
     level: str = "DEBUG"
     path: str = "../sync.log"
-    rotation: str = "10 MB"
+    rotation: str = "1 MB"
     format: str = (
         "{time:YYYY-MM-DD HH:mm:ss} | {level:<8} | "
-        "{file.remote_full}{function}:{line} - {message}"
+        "{file.name}{function}:{line} - {message}"
     )
-    retention: Optional[str] = None
-    compression: Optional[str] = None
+    retention: str | None = None
+    compression: str | None = None
 
 
 class LoggingConfig(BaseModel):
@@ -48,20 +55,21 @@ class AppConfig(BaseSettings):
     # fmt: off
     # FTP
     ftp_root                        : str                           = "/pub/support/galaktika/bug_fix/GAL910/UPDATES/"
-    ftp_username                    : str                           = "anonymous"
-    ftp_host                        : str                           = "ftp.galaktika.ru"
-    ftp_timeout_sec                 : int                           = 5
-    ftp_repeat                      : int                           = 3
-    ftp_retry_delay_seconds         : int                           = 2
+    ftp_username                    : Literal["anonymous"]          = "anonymous"
+    ftp_host                        : Literal["ftp.galaktika.ru"]   = "ftp.galaktika.ru"
+    ftp_timeout_sec                 : PositiveFloat                 = 3
+    ftp_repeat                      : PositiveInt                   = 3
+    ftp_retry_delay_seconds         : PositiveFloat                 = 1
+    ftp_blocksize                   : PositiveInt                   = 64 * 1024  # > 0
 
     # Локальный репозиторий
-    local_root                      : Path
-    path_new                        : Path                          = Path("NEW")
-    path_old                        : Path                          = Path("OLD")
+    local_dir                      : Path                           = Path("C:\\Дистрибутив\\PREPARE\\")
+    new_dir                        : Path | None                    = None
+    old_dir                        : Path | None                    = None
 
     # Поведение
-    verify_mode                     : Literal["size", "md5_hash"]  = "md5_hash"
-    conflict_policy                 : Literal["FAIL", "WARN"]       = "FAIL"
+    verify_mode                     : Literal["size", "md5_hash"]    = "md5_hash"
+    conflict_policy                 : Literal["FAIL", "WARN"]        = "FAIL"
 
     # Служебные файлы
     date_file: Path = Path("date_file")
@@ -69,6 +77,23 @@ class AppConfig(BaseSettings):
     # Logging
     logging: LoggingConfig = LoggingConfig()
     # fmt: on
+
+    @model_validator(mode="after")
+    def _derive_dirs(self) -> Self:
+        # если new_dir/old_dir не заданы в YAML — считаем от local_dir
+        if self.new_dir is None:
+            self.new_dir = self.local_dir / "NEW"
+        if self.old_dir is None:
+            self.old_dir = self.local_dir / "OLD"
+        return self
+
+    @property
+    def new_dir_path(self) -> Path:
+        return cast(Path, self.new_dir)
+
+    @property
+    def old_dir_path(self) -> Path:
+        return cast(Path, self.old_dir)
 
     model_config = SettingsConfigDict(
         extra="forbid",

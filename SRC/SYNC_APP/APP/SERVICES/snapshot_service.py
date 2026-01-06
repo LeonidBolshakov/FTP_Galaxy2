@@ -7,22 +7,25 @@ from SRC.SYNC_APP.APP.dto import (
     SnapshotInput,
     RepositorySnapshot,
     FileSnapshot,
+    FileSnapshot,
     FTPInput,
     DownloadFileError,
     RepositorySnapshotError,
     ModeSnapShop,
     DownloadDirFtpInput,
+    RepositorySnapshot,
 )
 
 
 class SnapShotService:
     def local(self, data: SnapshotInput) -> RepositorySnapshot:
-        local_dir = data.context.app.local_root
+        local_dir = data.context.app.local_dir
 
         files = dict()
         for file in local_dir.iterdir():
             if file.is_file():
                 files[file.name] = FileSnapshot(
+                    file.name,
                     file.stat().st_size,
                     (
                         self._md5sum(file)
@@ -33,7 +36,7 @@ class SnapShotService:
         return RepositorySnapshot(files=files)
 
     def remote(self, data: SnapshotInput) -> RepositorySnapshot:
-        ftp = Ftp(ftp_input=FTPInput(context=data.context))
+        ftp = Ftp(FTPInput(data.context, data.ftp))
         ftp.connect()
         try:
             items = ftp.download_dir(
@@ -45,7 +48,11 @@ class SnapShotService:
             ) from e
 
         files = {
-            items.remote_full: FileSnapshot(size=items.size, md5_hash=items.md5_hash)
+            items.remote_full: FileSnapshot(
+                name=items.remote_full,
+                size=items.size,
+                md5_hash=items.md5_hash,
+            )
             for items in items
         }
 

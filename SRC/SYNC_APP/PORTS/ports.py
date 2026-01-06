@@ -14,7 +14,7 @@ from SRC.SYNC_APP.APP.dto import (
     ErrorEvent,
     VersionConflictGroup,
     ValidateRepositoryInput,
-    RepositoryMetaSnapshot,
+    RepositorySnapshot,
 )
 
 
@@ -27,7 +27,8 @@ class ExecutionGate(Protocol):
 # ---------- snapshot ----------
 class SnapshotService(Protocol):
     def local(self, data: SnapshotInput) -> RepositorySnapshot: ...
-    def remote(self, data: SnapshotInput) -> RepositoryMetaSnapshot: ...
+
+    def remote(self, data: SnapshotInput) -> RepositorySnapshot: ...
 
 
 # ---------- diff ----------

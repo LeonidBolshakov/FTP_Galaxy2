@@ -1,3 +1,6 @@
+from ftplib import FTP
+from typing import Callable
+
 from SRC.SYNC_APP.APP.dto import (
     RuntimeContext,
     ExecutionChoice,
@@ -24,6 +27,7 @@ from SRC.SYNC_APP.PORTS.ports import (
 class SyncController:
     def __init__(
         self,
+            setup_loguru: Callable,
         runtime_context: RuntimeContext,
         snapshot_service: SnapshotService,
         diff_planner: DiffPlanner,
@@ -32,6 +36,7 @@ class SyncController:
         error_handler: ErrorHandler,
         execution_gate: ExecutionGate,
     ):
+        self.setup_loguru = setup_loguru
         self.runtime_context = runtime_context
         self.snapshot_service = snapshot_service
         self.diff_planner = diff_planner
@@ -41,16 +46,18 @@ class SyncController:
         self.execution_gate = execution_gate
 
     # fmt: on
-
     def run(self) -> None:
+        self.setup_loguru(self.runtime_context)
+
         if self.execution_gate.check(self.runtime_context) == ExecutionChoice.SKIP:
             return
 
+        ftp = FTP()
         remote_before = self.snapshot_service.remote(
-            SnapshotInput(self.runtime_context, ModeSnapShop.LITE_MODE)
+            SnapshotInput(self.runtime_context, ftp, ModeSnapShop.LITE_MODE)
         )
         local_before = self.snapshot_service.local(
-            SnapshotInput(self.runtime_context, ModeSnapShop.LITE_MODE)
+            SnapshotInput(self.runtime_context, ftp, ModeSnapShop.LITE_MODE)
         )
 
         pre_plan: DiffPlan = self.diff_planner.run(
@@ -67,19 +74,27 @@ class SyncController:
             )
 
         self.transfer_service.run(
-            TransferInput(self.runtime_context, TransferMode.delete, pre_plan.to_delete)
+            TransferInput(
+                self.runtime_context, ftp, TransferMode.download, pre_plan.to_download
+            )
         )
+
         self.transfer_service.run(
             TransferInput(
-                self.runtime_context, TransferMode.download, pre_plan.to_download
+                self.runtime_context, ftp, TransferMode.delete, pre_plan.to_delete
             )
         )
 
         remote_after = self.snapshot_service.remote(
-            SnapshotInput(self.runtime_context, ModeSnapShop.FULL_MODE, only_for=set())
+            SnapshotInput(
+                self.runtime_context, ftp, ModeSnapShop.FULL_MODE, only_for=set()
+            )
         )
+        # Необосновано чистит NEW
         local_after = self.snapshot_service.local(
-            SnapshotInput(self.runtime_context, ModeSnapShop.FULL_MODE, only_for=set())
+            SnapshotInput(
+                self.runtime_context, ftp, ModeSnapShop.FULL_MODE, only_for=set()
+            )
         )
 
         post_plan: DiffPlan = self.diff_planner.run(

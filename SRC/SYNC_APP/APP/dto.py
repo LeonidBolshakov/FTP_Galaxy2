@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Set
+from typing import Set, Union
+from ftplib import FTP
 
 from SRC.SYNC_APP.CONFIG.config import AppConfig
 
@@ -35,8 +38,8 @@ class InvalidFile:
 
 @dataclass(frozen=True)
 class DiffPlan:
-    to_delete           : list[str]
-    to_download         : list[str]
+    to_delete           : list[FileSnapshot]
+    to_download         : list[FileSnapshot]
     diff_files          : list[InvalidFile]
 
 
@@ -47,8 +50,9 @@ class ModeSnapShop(Enum):
 
 @dataclass(frozen=True)
 class FileSnapshot:
+    name                : str
     size                : int | None
-    md5_hash           : str | None
+    md5_hash            : str | None
 
 
 @dataclass(frozen=True)
@@ -75,34 +79,24 @@ class ExecutionChoice(Enum):
 @dataclass(frozen=True)
 class SnapshotInput:
     context             : RuntimeContext
+    ftp                 : FTP
     mode                : ModeSnapShop
     only_for            :Set | None = None
-
-
-
-@dataclass(frozen=True)
-class FileMeta:
-    size: int | None
-    md5_hash: str | None
-
-
-@dataclass(frozen=True)
-class RepositoryMetaSnapshot:
-    files: dict[str, FileMeta]
 
 
 @dataclass(frozen=True)
 class DiffInput:
     context             : RuntimeContext
     local               : RepositorySnapshot
-    remote              : RepositoryMetaSnapshot
+    remote              : RepositorySnapshot
 
 
 @dataclass(frozen=True)
 class TransferInput:
     context             : RuntimeContext
+    ftp                 : FTP
     mode                : TransferMode
-    paths               : list[str]
+    snapshots           : Union[list[FileSnapshot], list[FileSnapshot]]
 
 
 @dataclass(frozen=True)
@@ -127,6 +121,7 @@ class ValidateRepositoryInput:
 @dataclass(frozen=True)
 class FTPInput:
     context             : RuntimeContext
+    ftp                 : FTP
 
 
 @dataclass(frozen=True)

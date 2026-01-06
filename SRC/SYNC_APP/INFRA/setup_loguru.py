@@ -2,10 +2,10 @@ import sys
 
 from loguru import logger
 
-from SRC.SYNC_APP.app.dto import RuntimeContext
+from SRC.SYNC_APP.APP.dto import RuntimeContext
 
 
-def setup(config: RuntimeContext):
+def setup_loguru(config: RuntimeContext):
     logger.remove()
 
     # fmt: off

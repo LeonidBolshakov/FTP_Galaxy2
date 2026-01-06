@@ -6,7 +6,7 @@ def parse_args() -> argparse.Namespace:
     default_config = Path(__file__).parent / "config.yaml"
     p = argparse.ArgumentParser(prog="Sync_FTP_Galaxy")
     p.add_argument(
-        "config",
+        "--config",
         type=Path,
         nargs="?",  # ← делает аргумент необязательным
         default=default_config,  # ← значение по умолчанию

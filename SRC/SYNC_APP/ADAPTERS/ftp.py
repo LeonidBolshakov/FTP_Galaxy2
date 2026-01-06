@@ -10,11 +10,14 @@
 который классифицирует ошибки и выполняет повторные попытки при временных сбоях.
 """
 
+import posixpath
+import os
 from ftplib import FTP, error_perm, error_reply, error_temp, error_proto
 from socket import timeout
-from time import sleep
-from typing import TypedDict, Type, TypeVar, Callable, cast
+from time import sleep, monotonic
+from typing import TypedDict, Type, TypeVar, Callable, cast, BinaryIO
 from pathlib import Path
+from dataclasses import dataclass
 
 from loguru import logger
 
@@ -27,6 +30,16 @@ from SRC.SYNC_APP.APP.dto import (
     DownloadDirFtpInput,
     ModeSnapShop,
 )
+
+TEMP_EXCEPTIONS = (
+    timeout,
+    OSError,
+    error_temp,
+    EOFError,
+    ConnectionResetError,
+    BrokenPipeError,
+    AttributeError,  # sock is None -> not connected
+)  # Исключения, при которых имеет смысл повторить попытку обращения к FTP
 
 
 class MLSDFacts(TypedDict, total=False):
@@ -56,6 +69,28 @@ class ResumingFileDownloadError(Exception):
     pass
 
 
+@dataclass
+class _RetrWriterWithProgress:
+    f: BinaryIO
+    label: str
+    downloaded: int
+    update_every_sec: float = 0.5
+
+    _last_ts: float = 0.0
+
+    def __call__(self, chunk: bytes) -> None:
+        self.f.write(chunk)
+        self.downloaded += len(chunk)
+
+        now = monotonic()
+        if now - self._last_ts >= self.update_every_sec:
+            print(f"\r{self.label!r}: {self.downloaded} байт", end="", flush=True)
+            self._last_ts = now
+
+    def finish(self) -> None:
+        print(f"\r{self.label!r}: {self.downloaded} bytes", flush=True)
+
+
 T = TypeVar("T")
 E = TypeVar("E", bound=Exception)
 
@@ -72,16 +107,17 @@ class Ftp:
     """
 
     def __init__(self, ftp_input: FTPInput) -> None:
-        """Сохраняет входные настройки и создаёт пустой FTP-клиент."""
+        """Сохраняет входные настройки"""
         self.ftp_input = ftp_input
-        self.ftp = FTP()
+        self.ftp = ftp_input.ftp
+        self.blocksize = ftp_input.context.app.ftp_blocksize
 
     # -------------------------
     # --- _ftp_call()
     # -------------------------
     def _is_temporary_ftp_error(self, e: BaseException) -> bool:
         """True для ошибок, при которых имеет смысл повторить попытку."""
-        return isinstance(e, (timeout, OSError, error_temp))
+        return isinstance(e, TEMP_EXCEPTIONS)
 
     def _raise_permanent_ftp_error(
         self, what: str, err_cls: type[E], e: BaseException
@@ -94,14 +130,25 @@ class Ftp:
                 f"Протокольная или некорректная ошибка при {what}:\n{e}"
             ) from e
 
-    def _handle_temporary_ftp_error(self, temp_log: str, e: BaseException) -> None:
-        """Логирует временную ошибку и пытается переподключиться."""
-        logger.warning(f"{temp_log}:\n{e}. Повтор...")
+    def _handle_temporary_ftp_error(
+            self, temp_log: str, e: BaseException
+    ) -> Exception | None:
+        """Логирует временную ошибку и пытается переподключиться.
+
+        Returns:
+            Исключение переподключения (если переподключиться не удалось), иначе None.
+        """
+
+        logger.info("{}:\n{}. Повтор...", temp_log, e)
 
         try:
             self._reconnect()
         except Exception as recon_e:
-            logger.info(f"Ошибка переподключения: {recon_e}")
+            # Важно: не прерываем ретраи _ftp_call(), но сохраняем причину
+            logger.info("Ошибка переподключения: {}", recon_e)
+            return recon_e
+
+        return None
 
     def _sleep_retry_delay(self) -> None:
         """Пауза между попытками (фиксированный backoff)."""
@@ -119,7 +166,7 @@ class Ftp:
         """Единая обёртка для FTP-вызовов: ретраи + классификация ошибок.
 
         Делает несколько попыток выполнить `action()`. Временные сетевые/серверные сбои
-        (timeout, OSError, error_temp) считаются ретраебельными: пишется warning,
+        (timeout, OSError, error_temp) считаются повторяемыми: пишется warning,
         выполняется попытка переподключения и делается пауза перед следующей попыткой.
 
         Постоянные/протокольные ошибки (error_perm, error_reply, error_proto) не ретраятся
@@ -133,7 +180,7 @@ class Ftp:
             err_cls: Класс доменного исключения, которое будет выброшено при фатальной
                 ошибке или после исчерпания повторов (например, `FTPListError`,
                 `DownloadFileError`, `ConnectError`).
-            temp_log: Префикс/контекст для логов при временной ошибке (warning),
+            temp_log: Префикс/контекст для логов при временной ошибке (info),
                 например: "Временный сбой при MLSD", "Timeout при RETR".
 
         Returns:
@@ -144,6 +191,7 @@ class Ftp:
                 ретраи исчерпаны, либо если произошла неизвестная ошибка.
         """
         repeat = self.ftp_input.context.app.ftp_repeat
+        last_error: BaseException | None = None
 
         for _ in range(repeat):
             try:
@@ -151,7 +199,8 @@ class Ftp:
 
             except Exception as e:
                 if self._is_temporary_ftp_error(e):
-                    self._handle_temporary_ftp_error(temp_log, e)
+                    recon_e = self._handle_temporary_ftp_error(temp_log, e)
+                    last_error = recon_e or e
                     self._sleep_retry_delay()
                     continue
 
@@ -159,15 +208,17 @@ class Ftp:
                 self._raise_permanent_ftp_error(what, err_cls, e)
 
                 # сюда попадём только если e не из известных классов
-                raise err_cls(f"Неизвестная ошибка при {what}:\n{e}") from e
-
-        raise err_cls(f"Не удалось выполнить {what} после повторов")
+                raise err_cls(f"Неизвестная ошибка при {what}- {e}") from e
+        raise err_cls(
+            f"Не удалось выполнить {what} после {repeat} попыток.\n"
+            f"Последняя ошибка: {last_error}"
+        ) from last_error
 
     # ---------------------------
     # connect
     # ---------------------------
 
-    def _safe_connect(self, host: str, time_out: int) -> None:
+    def _safe_connect(self, host: str, time_out: float) -> None:
         """Подключение к FTP через _ftp_call() (с ретраями на временных сбоях)."""
         self._ftp_call(
             lambda: self.ftp.connect(host, timeout=time_out),
@@ -178,37 +229,36 @@ class Ftp:
 
     def _safe_login(self, username: str) -> None:
         """Логин на FTP с развёрнутой классификацией ошибок (530 и т.п.)."""
+
+        def _raise_fail(msg: str) -> None:
+            raise ConnectionError(f"msg\n{e}") from e
+
         try:
             self.ftp.login(user=username, passwd="")
             return
 
         except error_perm as e:
             if str(e).startswith("530"):
-                raise ConnectError(
-                    f"Неверные учётные данные при входе на FTP сервер: {username=} passwd="
-                    f"\n{e}"
-                ) from e
-            else:
-                raise ConnectError(
-                    f"Постоянная ошибка при входе на FTP сервер: {username=} passwd="
-                    f"\n{e}"
-                ) from e
+                _raise_fail(
+                    f"Неверные учётные данные при входе на FTP сервер: {username=} passwd"
+                )
+            _raise_fail(
+                f"Постоянная ошибка при входе на FTP сервер: {username=} passwd"
+            )
 
         except error_temp as e:
-            raise ConnectError(
-                f"Временная ошибка при входе на FTP сервер. Повторите попытку позже\n{e}"
-            ) from e
+            _raise_fail(
+                f"Временная ошибка при входе на FTP сервер. Повторите попытку позже"
+            )
 
         except (error_reply, error_proto) as e:
-            raise ConnectError(
-                f"Неожиданный/некорректный ответ FTP сервера\n{e}"
-            ) from e
+            _raise_fail(f"Неожиданный/некорректный ответ FTP сервера")
 
         except timeout as e:
-            raise ConnectError(f"Timeout при входе на FTP сервер\n{e}") from e
+            _raise_fail(f"Timeout при входе на FTP сервер")
 
         except OSError as e:
-            raise ConnectError(f"Сетевая ошибка при входе на FTP сервер:\n{e}") from e
+            _raise_fail(f"Сетевая ошибка при входе на FTP сервер")
 
     def connect(self) -> None:
         """Подключается к FTP и выполняет логин"""
@@ -220,7 +270,7 @@ class Ftp:
         self._safe_login(username)
 
     # ---------------------------
-    # Download dir
+    # Download dir_path
     # ---------------------------
     def _safe_cwd_ftp(self, path: str) -> None:
         """Переход на директорию с ретраями"""
@@ -242,21 +292,16 @@ class Ftp:
 
     def _dir_item_from_mlsd(
         self, ftp_root: str, name: str, facts: MLSDFacts, data: DownloadDirFtpInput
-    ) -> FTPDirItem | None:
+    ) -> FTPDirItem:
         """построить элемент снапшота из записи MLSD"""
-        # Полный путь до файла на FTP (унифицируем слеши).
-        remote_full = f"{ftp_root.rstrip('/')}/{name}" if ftp_root else name
 
-        try:
-            # Размер берём из MLSD facts (если сервер его даёт).
-            size = self._get_size(facts=facts)
-            # Хэш запрашиваем отдельной командой (XMD5), если включён соответствующий режим.
-            md5_hash = self._get_hmd5(remote_full, data)
-            return FTPDirItem(remote_full=remote_full, size=size, md5_hash=md5_hash)
-        except DownloadFileError as e:
-            # Ошибка на отдельном файле не валит весь список: логируем и пропускаем.
-            logger.info(f"Пропускаю файл {remote_full!r}: {e}")
-            return None
+        # Размер берём из MLSD facts (если сервер его даёт).
+
+        remote_full = posixpath.join(ftp_root, name)
+        md5_hash = self._get_hmd5(remote_full, data)
+        size = self._get_size(facts=facts)
+
+        return FTPDirItem(remote_full=remote_full, size=size, md5_hash=md5_hash)
 
     def _build_dir_items(
         self,
@@ -272,16 +317,14 @@ class Ftp:
                 continue  # директории/ссылки/прочее игнорируем
 
             item = self._dir_item_from_mlsd(ftp_root, name, facts, data)
-            if item is not None:
-                items.append(item)
+            items.append(item)
 
         return items
 
     def download_dir(self, data: DownloadDirFtpInput) -> list[FTPDirItem]:
-        """Считывает каталог FTP и возвращает список файлов.
+        """Считывает каталог FTP и возвращает список FTPDirItem.
 
-        Использует MLSD; при необходимости дополнительно запрашивает XMD5 для выбранных файлов.
-        Ошибки чтения отдельного файла не прерывают обработку списка.
+        Использует MLSD; при необходимости, дополнительно запрашивает XMD5 для выбранных файлов.
         """
 
         # 1) Переходим в корневую директорию через безопасный вызов с ретраями
@@ -291,68 +334,74 @@ class Ftp:
         # 2) Считываем содержимое директории через MLSD (возвращает name + facts)
         raw_items = self._safe_mlsd()
 
-        # 3) формирование списка элементов директории
+        # 3) Формируем список элементов директории
         return self._build_dir_items(raw_items, ftp_root, data)
 
     # ---------------------------
     # Download with resume
     # ---------------------------
-    def _calc_offset(self, local_path: str, expected_size: int) -> int:
+    def _calc_offset(self, local_path: Path, expected_size: int) -> int:
         """Определяет смещение для докачки (REST) на основе локального файла.
 
         Если resume=False или файла нет — начинаем с нуля.
         Если локальный файл больше ожидаемого — докачка бессмысленна, начинаем заново.
         """
-        path = Path(local_path)
-        if not path.exists():
+        if not local_path.exists():
             return 0
 
-        offset = path.stat().st_size
+        offset = local_path.stat().st_size
         return 0 if offset > expected_size else offset
 
-    @staticmethod
-    def _quote_remote(path: str) -> str:
-        """
-        Минимальная “кавычка” для FTP-команд, чтобы пережить пробелы в именах.
-        Большинство серверов принимает двойные кавычки.
-        """
-        # Экранирование двойных кавычек внутри имени на случай экзотики.
-        safe = path.replace('"', r"\"")
-        return f'"{safe}"'
+    def _retrbinary_with_resume(
+            self,
+            remote_full_name: str,
+            f: BinaryIO,
+            callback,  # Callable[[bytes], None]
+    ) -> str:
+        # ВАЖНО: вызывается на каждый ретрай -> rest пересчитывается каждый раз
+        f.flush()
+        f.seek(0, os.SEEK_END)  # на всякий случай в конец
+        rest = f.tell()
+
+        return self.ftp.retrbinary(
+            f"RETR {remote_full_name}",
+            callback,
+            rest=rest or None,  # 0 -> None
+            blocksize=self.blocksize,
+        )
 
     def _download_attempt(
         self,
         remote_full_name: str,
-        local_full_name: str,
+            local_full_name: Path,
         *,
         offset: int,
-        blocksize: int,
     ) -> None:
-        """Выполняет одну попытку скачивания файла (с учётом offset для докачки)."""
-        # Создаём директории под локальный файл, если их нет.
-        local_path = Path(local_full_name)
+        """Скачивание файла с учётом offset (REST) и ретраями внутри _ftp_call()."""
 
-        self.make_safe_dir_name(local_path)
-        # При докачке пишем в конец (append binary), иначе перезаписываем (write binary).
+        self.make_safe_dir_name(local_full_name)
+
         mode = "ab" if offset else "wb"
-        with open(local_path, mode) as f:
-            # retrbinary пишет данные блоками; callback = f.write.
-            self._ftp_call(
-                lambda: self.ftp.retrbinary(
-                    f"RETR {self._quote_remote(remote_full_name)}",
-                    f.write,
-                    blocksize=blocksize,
-                    rest=offset if offset else None,
-                ),
-                what=f"загрузка файла {remote_full_name!r}",
-                err_cls=DownloadFileError if offset == 0 else ResumingFileDownloadError,
-                temp_log=f"Сбой/таймаут при загрузке файла {remote_full_name!r}",
+        err_cls = DownloadFileError if offset == 0 else ResumingFileDownloadError
+
+        with open(local_full_name, mode) as f:
+            writer = _RetrWriterWithProgress(
+                f=f, label=remote_full_name, downloaded=offset
             )
 
-    def _local_size(self, full_name: str) -> int:
-        """Возвращает размер локального файла или -1, если файла нет."""
-        path = Path(full_name)
-        return path.stat().st_size if path.exists() else -1
+            try:
+                self._ftp_call(
+                    lambda: self._retrbinary_with_resume(remote_full_name, f, writer),
+                    what=f"загрузка файла {remote_full_name!r}",
+                    err_cls=err_cls,
+                    temp_log=f"Сбой/таймаут при загрузке файла {remote_full_name!r}",
+                )
+            finally:
+                writer.finish()
+
+    def _local_size(self, path: Path) -> int:
+        """Возвращает размер локального файла или 0, если файла нет."""
+        return path.stat().st_size if path.exists() else 0
 
     def make_safe_dir_name(self, file: str | Path) -> Path:
         """Гарантирует существование родительской директории для file и возвращает её Path."""
@@ -360,68 +409,104 @@ class Ftp:
         parent.mkdir(parents=True, exist_ok=True)
         return parent
 
+    def _download_attempt_as_download_error(
+            self,
+            *,
+            remote_full_name: str,
+            local_full_name: Path,
+            offset: int,
+    ) -> None:
+        """Скачивает/докачивает файл и поднимает DownloadFileError при любой ошибке докачки."""
+        try:
+            self._download_attempt(
+                remote_full_name=remote_full_name,
+                local_full_name=local_full_name,
+                offset=offset,
+            )
+        except ResumingFileDownloadError as e:
+            raise DownloadFileError(
+                f"Ошибка при догрузке файла {remote_full_name!r}: {e}"
+            ) from e
+
+    def _try_resume_after_failure(
+            self,
+            *,
+            remote_item: FTPDirItem,
+            local_path: Path,
+            cause: Exception,
+    ) -> None:
+        """Если возможно, пытается докачать файл после неудачной загрузки.
+
+        Выбрасывает:
+          - DownloadFileError: если докачка невозможна или докачка тоже не удалась.
+          - пробрасывает исходное исключение, если докачка не имеет смысла (offset<=0).
+        """
+        if remote_item.size is None:
+            raise DownloadFileError(
+                "Догрузка невозможна: FTP сервер не указал размер файла."
+            ) from cause
+
+        offset = self._calc_offset(local_path, remote_item.size)
+        if offset <= 0:
+            # Нечего докачивать: повторная попытка будет идентична первой.
+            raise  # проброс исходного исключения (из except-блока, где вызван этот метод)
+
+        logger.info(
+            "Неудача при загрузке, пробуем докачку: {!r} (offset={})",
+            remote_item.remote_full,
+            offset,
+        )
+
+        self._download_attempt_as_download_error(
+            remote_full_name=remote_item.remote_full,
+            local_full_name=local_path,
+            offset=offset,
+        )
+
     def _download_file_with_resume(
-        self, remote_item: FTPDirItem, local_path: str, *, blocksize: int
+            self, remote_item: FTPDirItem, local_path: Path
     ) -> None:
         """Скачиваем файл с возможной докачкой"""
+        # 1) пробуем скачать с нуля
         try:
             self._download_attempt(
                 remote_full_name=remote_item.remote_full,
                 local_full_name=local_path,
                 offset=0,
-                blocksize=blocksize,
             )
 
         except DownloadFileError as e:
-            logger.info(
-                f"Неудача при загрузке файла {e}.\nОрганизуем догрузку: {remote_item.remote_full!r}"
-            )
-
-            if remote_item.size is None:
-                raise DownloadFileError(
-                    "Догрузка невозможно. FTP сервер не указал размер файла"
-                )
-            offset = self._calc_offset(local_path, remote_item.size)
-            self._download_attempt(
-                remote_full_name=remote_item.remote_full,
-                local_full_name=local_path,
-                offset=offset,
-                blocksize=blocksize,
-            )
-
-        except ResumingFileDownloadError as e:
-            # Постоянная ошибка.
-            raise DownloadFileError(
-                f"Ошибка при загрузке файла {remote_item.remote_full}:\n{e}"
+            self._try_resume_after_failure(
+                remote_item=remote_item,
+                local_path=local_path,
+                cause=e,
             )
 
     def download_file(
         self,
-        remote_item: FTPDirItem,
-        local_path: str,
-        *,
-        blocksize: int,
+            remote_full_item: FTPDirItem,
+            local_full_path: Path,
     ) -> None:
         """Скачивает один файл и проверяет итоговый размер."""
 
         # 1) Скачиваем файл
-        self._download_file_with_resume(remote_item, local_path, blocksize=blocksize)
+        self._download_file_with_resume(remote_full_item, local_full_path)
 
         # 2) если размер совпал — готово
-        local_size = self._local_size(local_path)
-        if remote_item.size is None:
+        local_size = self._local_size(local_full_path)
+        if remote_full_item.size is None:
             raise DownloadFileError(
-                f"FTP сервер не указал размер файла {remote_item.remote_full}\n"
+                f"FTP сервер не указал размер файла {remote_full_item.remote_full}\n"
                 f"Контроль по размеру проводится не будет."
             )
-        if local_size == remote_item.size:
+        if local_size == remote_full_item.size:
             return
 
         # 3) иначе — фиксируем неудачу
         raise DownloadFileError(
             f"Размер не совпал после скачивания.\n"
-            f"remote={remote_item.remote_full}\n"
-            f"ожидаемый размер expected={remote_item.size}, реальный размер local={local_size}"
+            f"remote={remote_full_item.remote_full}\n"
+            f"ожидаемый размер expected={remote_full_item.size}, реальный размер local={local_size}"
         )
 
     def _get_size(
@@ -444,7 +529,7 @@ class Ftp:
             return None
 
         responses = self._ftp_call(
-            lambda: self.ftp.sendcmd("XMD5 " + self._quote_remote(full_remote)),
+            lambda: self.ftp.sendcmd(f"XMD5 {full_remote}"),
             what=f"XMD5 для {full_remote!r}",
             err_cls=DownloadFileError,
             temp_log=f"Сбой/таймаут при чтении XMD5 для файла {full_remote!r}",
@@ -467,7 +552,6 @@ class Ftp:
                 self.ftp.close()
             except Exception:
                 pass
-
             self.ftp = FTP()
 
             host = self.ftp_input.context.app.ftp_host
@@ -476,7 +560,7 @@ class Ftp:
             root = self.ftp_input.context.app.ftp_root
 
             # ОДНА попытка. Без _ftp_call и без ретраев.
-            self.ftp.connect(host, timeout=time_out)
+            self.ftp.connect(host=host, timeout=time_out)
             self.ftp.login(user=username, passwd="")
 
             if root:
@@ -484,5 +568,6 @@ class Ftp:
 
         except (timeout, OSError, error_temp, error_perm) as e:
             # логируем и ПЕРЕБРАСЫВАЕМ
-            logger.error(f"Не удалось переподключиться к FTP:\n{e}")
+            self.ftp.close()
+            logger.error("Не удалось переподключиться к FTP:\n{}", e)
             raise

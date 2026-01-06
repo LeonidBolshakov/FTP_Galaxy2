@@ -29,7 +29,7 @@ class EmptyDiffPlanner:
 
 class TransferService:
     def run(self, data: TransferInput) -> None:
-        logger.info("Transfer {}: {} file(s)", data.mode, len(data.paths))
+        logger.info("Transfer {}: {} file(s)", data.mode, len(data.snapshots))
 
 
 class EmptyRepositoryValidator:

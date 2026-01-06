@@ -2,7 +2,7 @@ ftp_root: "/pub/support/galaktika/bug_fix/GAL910/UPDATES/"
 ftp_timeout_sec: 5
 
 # ВАЖНО: для Windows путей нужны одинарные кавычки
-local_root: 'C:\Дистрибутив\PREPARE\'
+local_dir: 'C:\Дистрибутив\PREPARE_DEBUG\'
 
 logging:
   console:

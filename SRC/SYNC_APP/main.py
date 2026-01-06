@@ -5,10 +5,11 @@ from SRC.SYNC_APP.CONFIG.config_CLI import parse_args
 from SRC.SYNC_APP.APP.dto import RuntimeContext, FTPListError, ConnectError
 from SRC.SYNC_APP.APP.controller import SyncController
 from SRC.SYNC_APP.APP.SERVICES.snapshot_service import SnapShotService
-from SRC.SYNC_APP.APP.SERVICES.diff_planer import DiffPlaner
+from SRC.SYNC_APP.APP.SERVICES.diff_planer import DiffPlanner
+from SRC.SYNC_APP.APP.SERVICES.transfer_service import TransferService
 from SRC.SYNC_APP.INFRA.executiongate import ExecutionGate
+from SRC.SYNC_APP.INFRA.setup_loguru import setup_loguru
 from SRC.SYNC_APP.INFRA.stubs import (
-    TransferService,
     LogErrorHandler,
     EmptyRepositoryValidator,
 )
@@ -25,9 +26,10 @@ def main():
     runtime = RuntimeContext(app=app, once_per_day=args.once_per_day)
 
     controller = SyncController(
+        setup_loguru=setup_loguru,
         runtime_context=runtime,
         snapshot_service=SnapShotService(),
-        diff_planner=DiffPlaner(),
+        diff_planner=DiffPlanner(),
         transfer_service=TransferService(),
         error_handler=LogErrorHandler(),
         execution_gate=ExecutionGate(),

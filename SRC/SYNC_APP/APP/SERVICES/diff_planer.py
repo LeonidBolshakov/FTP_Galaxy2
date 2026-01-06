@@ -66,8 +66,15 @@ class DiffPlanner:
 
         common_names = local_names & remote_names
 
-        to_delete = list(sorted(local_names - remote_names))
-        to_download = list(sorted(remote_names - local_names))
+        delete = local_names - remote_names
+        to_delete: list[FileSnapshot] = []
+        for file_name in delete:
+            to_delete.append(local_dict_files[file_name])
+
+        download = remote_names - local_names
+        to_download: list[FileSnapshot] = []
+        for file_name in download:
+            to_download.append(remote_dict_files[file_name])
 
         diff_files: list[InvalidFile] = []
         for file_name in sorted(common_names):

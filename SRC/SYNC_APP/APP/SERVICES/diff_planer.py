@@ -98,5 +98,7 @@ class DiffPlanner:
                 )
 
         return DiffPlan(
-            to_delete=to_delete, to_download=to_download, diff_files=diff_files
+            to_delete=sorted(to_delete, key=lambda f: f.name),
+            to_download=sorted(to_download, key=lambda f: f.name),
+            diff_files=sorted(diff_files, key=lambda f: f.name),
         )

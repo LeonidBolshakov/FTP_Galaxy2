@@ -2,8 +2,21 @@ ftp_root: "/pub/support/galaktika/bug_fix/GAL910/UPDATES/"
 ftp_timeout_sec: 5
 
 # ВАЖНО: для Windows путей нужны одинарные кавычки
-local_dir: 'C:\Дистрибутив\PREPARE_DEBUG\'
+local_dir: 'C:\Дистрибутив\PREPARE_DEBUG'
 
+stop_list:
+  - Z_STAFFDOPREPORTS_RES_.acd
+  - Z_STAFFREPORTS_RES.acd
+  - F_GOZREPORT_RES.acd
+  - F_TAXREPORT_RES.acd
+  - F_TBYREPORT_RES.acd
+  - F_USERREPORT_RES.acd
+  - SUPPORT_RES.acd
+  - Z_REPORT_RES.acd
+  - Z_STAFFREPORTS_RES.txt
+  - C_Tune_RES.txt
+  - Z_Calendar_RES.txt
+add_list: [ UPDATES.sfv ]
 logging:
   console:
     level: "INFO"

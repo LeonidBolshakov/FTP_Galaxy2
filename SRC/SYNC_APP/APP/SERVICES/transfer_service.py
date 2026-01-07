@@ -1,4 +1,7 @@
 from pathlib import Path
+from enum import Enum, auto
+import os
+import sys
 
 from loguru import logger
 
@@ -8,8 +11,34 @@ from SRC.SYNC_APP.APP.dto import (
     FTPInput,
     FTPDirItem,
     FileSnapshot,
+    LocalFileAccessError,
+    DownloadDirFtpInput,
 )
 from SRC.SYNC_APP.ADAPTERS.ftp import Ftp
+
+
+# fmt: off
+class NewDirAction(Enum):
+    CONTINUE                    = auto()    # Докачиваем в текущую NEW
+    RESTART                     = auto()    # Начинаем заново: чистим NEW и OLD
+    STOP                        = auto()    # Выходим из программы
+# fmt: on
+
+
+MENU = (
+    "Директория NEW содержит компоненты системы.\n"
+    "[П] Продолжаем (докачка)\n"
+    "[Н] Начинаем заново (очистим NEW и OLD)\n"
+    "[С] Прекращаем работу\n"
+)
+
+# fmt: off
+MAPPING = {
+    "п": NewDirAction.CONTINUE, "p": NewDirAction.CONTINUE, "g": NewDirAction.CONTINUE,
+    "н": NewDirAction.RESTART,  "n": NewDirAction.RESTART,  "y": NewDirAction.RESTART,
+    "с": NewDirAction.STOP,     "s": NewDirAction.STOP,     "c": NewDirAction.STOP,
+}
+# fmt: on
 
 
 class TransferService:
@@ -38,8 +67,8 @@ class TransferService:
         # Проверить один и тот же диск (C:, D: ...)
         if src.resolve().drive.lower() != old_dir.resolve().drive.lower():
             raise ValueError(
-                f"OLD должен быть на том же диске, что и src: "
-                f"{old_dir.resolve().drive} и {src.resolve().drive}"
+                f"OLD должен быть на том же диске, что и репозиторий: "
+                f"OLD - {old_dir.resolve().drive} и репозиторий - {src.resolve().drive}"
             )
 
     def _download(self, data: TransferInput):
@@ -48,18 +77,26 @@ class TransferService:
 
         new_dir = data.context.app.new_dir_path
         self.safe_mkdir(new_dir)
+        old_dir = data.context.app.old_dir_path
+        self.safe_mkdir(old_dir)
+
+        snapshots_by_name: dict[str, FileSnapshot] = {
+            Path(snap.name).name: snap for snap in snapshots
+        }
 
         try:
-            new_dir_list = self.normalize_new(
-                snapshots=snapshots,
-                new_dir=new_dir,
-                old_dir=data.context.app.old_dir_path,
+            self.sanitize_new_dir(new_dir=new_dir, snapshots_by_name=snapshots_by_name)
+            valid_new_snapshots = self.ensure_new_dir_ready(
+                new_dir=new_dir, old_dir=old_dir, snapshots_by_name=snapshots_by_name
             )
-        except SystemExit:
+        except DownloadDirFtpInput:
             raise
 
-        snapsots_wuthout_new_list = list(set(snapshots) - set(new_dir_list))
-        for snapshot in snapsots_wuthout_new_list:
+        valid_names = {s.name for s in valid_new_snapshots}
+        snapshots_to_download = [s for s in snapshots if s.name not in valid_names]
+        snapshots_to_download = self.apply_stop_list(data, snapshots_to_download)
+        ### !!!!! - STOP LIST + ADD LIST - !!!!! ### - добавить
+        for snapshot in snapshots_to_download:
             remote_full = snapshot.name
             local_name = Path(remote_full).name
             local_full_path = new_dir / local_name
@@ -71,42 +108,40 @@ class TransferService:
                     md5_hash=snapshot.md5_hash,
                 ),
                 local_full_path=local_full_path,
+                local_file_size=self.get_local_file_size(local_full_path),
             )
 
-    #         self._download_missing_files_to_new_dir(
-    #             ftp=ftp,
-    #             snapsots_wuthout_new_list=snapsots_wuthout_new_list,
-    #             new_dir=new_dir,
-    #         )
-    #     return
-    #
-    # def _download_missing_files_to_new_dir(
-    #     self,
-    #     ftp: Ftp,
-    #     snapsots_wuthout_new_list: list[FileSnapshot],
-    #     new_dir: Path,
-    # ) -> None:
-    #     for snapshot in snapsots_wuthout_new_list:
-    #         remote_full = snapshot.name
-    #         local_name = Path(remote_full).name
-    #         local_full_path = new_dir / local_name
-    #
-    #         ftp.download_file(
-    #             remote_full_item=FTPDirItem(
-    #                 remote_full=remote_full,
-    #                 size=snapshot.size,
-    #                 md5_hash=snapshot.md5_hash,
-    #             ),
-    #             local_full_path=local_full_path,
-    #         )
+    def _snapshot_name_to_stop_key(self, name: str) -> str:
+        stem, suffix = os.path.splitext(name)
+
+        base, sep, tail = stem.rpartition("_")  # только последний "_"
+        if sep and tail.isdigit():  # хвост = номер релиза
+            stem = base
+
+        return f"{stem.casefold()}{suffix.casefold()}"
+
+    def apply_stop_list(
+            self, data: TransferInput, snapshots: list[FileSnapshot]
+    ) -> list[FileSnapshot]:
+        stop_set: set[str] = {x.strip().casefold() for x in data.context.app.stop_list}
+
+        result: list[FileSnapshot] = []
+        for snap in snapshots:
+            if self._snapshot_name_to_stop_key(snap.name) not in stop_set:
+                result.append(snap)
+        return result
 
     def _delete(self, data: TransferInput):
         local_dir = data.context.app.local_dir
         self.safe_mkdir(local_dir)
+
         old_dir = data.context.app.old_dir_path
         self.safe_mkdir(old_dir)
+
         snapshots = data.snapshots
+
         self._assert_same_fs(local_dir, old_dir)
+
         for snapshot in snapshots:
             file_path = Path(local_dir) / snapshot.name
             try:
@@ -116,95 +151,165 @@ class TransferService:
                     PermissionError,
                     OSError,
             ) as e:
-                raise RuntimeError(f"Не смог удалить файл {e}") from e
+                raise RuntimeError(
+                    f"Не смог переместить файл {e} из {file_path} в {old_dir}"
+                ) from e
         return
 
     def safe_mkdir(self, dir_path: Path) -> None:
         Path(dir_path).mkdir(parents=True, exist_ok=True)
 
-    def normalize_new(
-            self, snapshots: list[FileSnapshot], new_dir: Path, old_dir: Path
-    ) -> list[FileSnapshot]:
+    def sanitize_new_dir(
+            self, new_dir: Path, snapshots_by_name: dict[str, FileSnapshot]
+    ) -> None:
+        for path in new_dir.iterdir():
+            self._ensure_is_file_or_exit(new_dir=new_dir, path=path)
+            snap = snapshots_by_name.get(path.name)
 
-        snapshots_by_name: dict[str, FileSnapshot] = {
-            Path(s.name).name: s for s in snapshots
-        }
-        log = logger.bind(dir=str(new_dir))
-
-        for item_in_dir in new_dir.iterdir():
-            if not item_in_dir.is_file():
-                log.error(
-                    "В директории найден не-файл: {item_in_dir}. Программа прекращает работу.",
-                    item_in_dir=item_in_dir,
-                )
-                raise SystemExit(1)
-
-            snap = snapshots_by_name.get(item_in_dir.name)
-
-            if snap is None:
-                log.warning(
-                    "Обнаружен неизвыестный файл {item_in_dir} — \n"
-                    "файл будет удалён.",
-                    item_in_dir=item_in_dir,
-                )
-                item_in_dir.unlink(missing_ok=True)
+            if self._delete_if_unknown(new_dir=new_dir, path=path, snap=snap):
                 continue
 
-            local_size = item_in_dir.stat().st_size
-            if local_size != snap.size:
-                log.warning(
-                    "Размер файла {name} ({local}) не равен размеру на FTP ({remote}) —\n"
-                    "файл будет удалён.",
-                    name=item_in_dir.name,
-                    local=local_size,
-                    remote=snap.size,
-                )
-                item_in_dir.unlink(missing_ok=True)
+            self._delete_if_oversized_or_size_zero(
+                new_dir=new_dir, path=path, snap=snap
+            )
 
-        items_dir = []
-        for item_dir in new_dir.iterdir():
-            items_dir.append(item_dir)
+    def _ensure_is_file_or_exit(self, new_dir: Path, path: Path) -> None:
+        if path.is_file():
+            return
 
-        if items_dir:
-            logger.info(f"В директории {new_dir} обнаружены компоненты системы")
-            while True:
-                respon = input(
-                    "Директория NEW содержит компоненты системы.\n"
-                    "Продолжаем скачивание? - 'П' + Enter\n"
-                    "Начинаем новое скачиывние? \n"
-                    "Компоненты будут удалены в каталогах NEW и OLD? - 'Н' + Enter\n"
-                    "Прекращаем работу - 'С' + Enter\n"
-                )
-                if respon in {"П", "п", "G", "g"}:
-                    return self.items_dir_to_filesnapshots(
-                        items_dir=items_dir, snapshots_by_name=snapshots_by_name
-                    )
+        logger.error(
+            "В директории {dir} найден не-файл: {item_in_dir}. Программа прекращает работу.",
+            dir=new_dir,
+            item_in_dir=path,
+        )
+        raise SystemExit(1)
 
-                if respon in {"Н", "н", "Y", "y"}:
-                    self.clean_dir(new_dir)
-                    self.clean_dir(old_dir)
-                    return self.items_dir_to_filesnapshots(
-                        items_dir=items_dir, snapshots_by_name=snapshots_by_name
-                    )
+    def _delete_if_unknown(
+            self, new_dir: Path, path: Path, snap: FileSnapshot | None
+    ) -> None:
+        if snap is not None:
+            return
 
-                if respon in {"С", "с", "C", "c"}:
-                    logger.error("Пользователь отказался продолжать работу")
-                    raise SystemExit(1)
+        logger.warning(
+            "Обнаружен неизвестный файл {item_in_dir} — файл будет удалён.",
+            item_in_dir=path,
+        )
+        path.unlink(missing_ok=True)
 
-        return self.items_dir_to_filesnapshots(
-            items_dir=items_dir, snapshots_by_name=snapshots_by_name
+    def _delete_if_oversized_or_size_zero(
+            self, new_dir: Path, path: Path, snap: FileSnapshot
+    ) -> None:
+        local_size = self.get_local_file_size(path)
+        remote_size = snap.size
+
+        if remote_size is None or local_size > remote_size or local_size == 0:
+            logger.warning(
+                "В директории {new_dir} размер файла {name} ({local}) больше размера на FTP ({remote})\n"
+                "или размер файла на FTP неизвестен\n"
+                "файл {name} будет удалён.\n",
+                new_dir=new_dir,
+                name=path.name,
+                local=local_size,
+                remote=remote_size or 0,
+            )
+            path.unlink(missing_ok=True)
+
+    def ensure_new_dir_ready(
+            self,
+            *,
+            new_dir: Path,
+            old_dir: Path,
+            snapshots_by_name: dict[str, FileSnapshot],
+    ) -> list[FileSnapshot]:
+        """
+        Если NEW пуста — просто строим локальный снапшот.
+        Если NEW не пуста — спрашиваем пользователя: продолжить / начать заново / остановить.
+        Возвращает то же, что items_dir_to_filesnapshots().
+        """
+        items_dir = list(new_dir.iterdir())
+        if not items_dir:
+            return self.select_size_matched_snapshots(
+                items_dir=items_dir,
+                snapshots_by_name=snapshots_by_name,
+            )
+
+        logger.info(
+            "В директории {new_dir} обнаружены компоненты системы", new_dir=new_dir
         )
 
-    def items_dir_to_filesnapshots(
-            self, items_dir, snapshots_by_name
+        action = self._prompt_new_dir_action()
+
+        if action is NewDirAction.STOP:
+            logger.error("Пользователь отказался продолжать работу")
+            raise SystemExit(1)
+
+        if action is NewDirAction.RESTART:
+            self.clean_dir(new_dir)
+            self.clean_dir(old_dir)
+            items_dir = list(new_dir.iterdir())
+
+        # CONTINUE или RESTART -> строим снапшот по текущему содержимому NEW
+        print("Продолжаем работать")
+        return self.select_size_matched_snapshots(
+            items_dir=items_dir,
+            snapshots_by_name=snapshots_by_name,
+        )
+
+    def _is_pycharm_console(self) -> bool:
+        return os.environ.get("PYCHARM_HOSTED") == "1"
+
+    def _read_char_windows(self, prompt: str) -> str:
+        # noinspection PyCompatibility
+        import msvcrt  # Windows-only
+
+        print(prompt, end="", flush=True)
+        ch = msvcrt.getwch()
+        print(ch)  # эхо
+        return ch
+
+    def _prompt_new_dir_action(self) -> NewDirAction:
+        use_msvcrt = (
+                sys.platform == "win32"
+                and sys.stdin.isatty()
+                and not self._is_pycharm_console()
+        )
+
+        read = self._read_char_windows if use_msvcrt else input
+
+        print(MENU, end="")
+        while True:
+            raw = read("> ").strip()
+            key = raw[:1].lower() if raw else ""
+            action = MAPPING.get(key)
+            if action is not None:
+                return action
+            print("Неверный выбор. Ожидается П/Н/С.")
+
+    def select_size_matched_snapshots(
+            self, items_dir: list[Path], snapshots_by_name: dict[str, FileSnapshot]
     ) -> list[FileSnapshot]:
         file_snapshots: list[FileSnapshot] = []
         for item_dir in items_dir:
-            file_snapshot = snapshots_by_name[item_dir.name]
-            file_snapshots.append(file_snapshot)
+            snap = snapshots_by_name.get(item_dir.name)
+            if snap and snap.size == self.get_local_file_size(item_dir):
+                file_snapshots.append(snap)
 
         return file_snapshots
 
     def clean_dir(self, dir_path: Path) -> None:
         for p in dir_path.iterdir():
             p.unlink(missing_ok=True)
+
+    def get_local_file_size(self, path: Path) -> Path:
+        try:
+            local_size = path.stat().st_size
+        except FileNotFoundError:
+            local_size = 0
+        except PermissionError as e:
+            raise LocalFileAccessError(f"Нет доступа к {path}") from e
+        except OSError as e:
+            raise LocalFileAccessError(
+                f"Ошибка файловой системы для {path}: {e}"
+            ) from e
+
+        return local_size

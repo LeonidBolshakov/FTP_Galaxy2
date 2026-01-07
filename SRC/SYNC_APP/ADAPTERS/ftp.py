@@ -15,7 +15,7 @@ import os
 from ftplib import FTP, error_perm, error_reply, error_temp, error_proto
 from socket import timeout
 from time import sleep, monotonic
-from typing import TypedDict, Type, TypeVar, Callable, cast, BinaryIO
+from typing import TypedDict, Type, TypeVar, Callable, cast, BinaryIO, NoReturn, Literal
 from pathlib import Path
 from dataclasses import dataclass
 
@@ -230,8 +230,8 @@ class Ftp:
     def _safe_login(self, username: str) -> None:
         """Логин на FTP с развёрнутой классификацией ошибок (530 и т.п.)."""
 
-        def _raise_fail(msg: str) -> None:
-            raise ConnectionError(f"msg\n{e}") from e
+        def _raise_fail(msg: str, exc: BaseException) -> NoReturn:
+            raise ConnectionError(f"{msg}\n{exc}") from exc
 
         try:
             self.ftp.login(user=username, passwd="")
@@ -240,25 +240,27 @@ class Ftp:
         except error_perm as e:
             if str(e).startswith("530"):
                 _raise_fail(
-                    f"Неверные учётные данные при входе на FTP сервер: {username=} passwd"
+                    f"Неверные учётные данные при входе на FTP сервер: {username=} passwd=***",
+                    e,
                 )
             _raise_fail(
-                f"Постоянная ошибка при входе на FTP сервер: {username=} passwd"
+                f"Постоянная ошибка при входе на FTP сервер: {username=} passwd=***",
+                e,
             )
 
         except error_temp as e:
             _raise_fail(
-                f"Временная ошибка при входе на FTP сервер. Повторите попытку позже"
+                "Временная ошибка при входе на FTP сервер. Повторите попытку позже", e
             )
 
         except (error_reply, error_proto) as e:
-            _raise_fail(f"Неожиданный/некорректный ответ FTP сервера")
+            _raise_fail("Неожиданный/некорректный ответ FTP сервера", e)
 
         except timeout as e:
-            _raise_fail(f"Timeout при входе на FTP сервер")
+            _raise_fail("Timeout при входе на FTP сервер", e)
 
         except OSError as e:
-            _raise_fail(f"Сетевая ошибка при входе на FTP сервер")
+            _raise_fail("Сетевая ошибка при входе на FTP сервер", e)
 
     def connect(self) -> None:
         """Подключается к FTP и выполняет логин"""
@@ -381,7 +383,7 @@ class Ftp:
 
         self.make_safe_dir_name(local_full_name)
 
-        mode = "ab" if offset else "wb"
+        mode: Literal["ab", "wb"] = "ab" if offset else "wb"
         err_cls = DownloadFileError if offset == 0 else ResumingFileDownloadError
 
         with open(local_full_name, mode) as f:
@@ -464,7 +466,7 @@ class Ftp:
         )
 
     def _download_file_with_resume(
-            self, remote_item: FTPDirItem, local_path: Path
+            self, remote_item: FTPDirItem, local_path: Path, offset: int = 0
     ) -> None:
         """Скачиваем файл с возможной докачкой"""
         # 1) пробуем скачать с нуля
@@ -472,7 +474,7 @@ class Ftp:
             self._download_attempt(
                 remote_full_name=remote_item.remote_full,
                 local_full_name=local_path,
-                offset=0,
+                offset=offset,
             )
 
         except DownloadFileError as e:
@@ -483,14 +485,14 @@ class Ftp:
             )
 
     def download_file(
-        self,
-            remote_full_item: FTPDirItem,
-            local_full_path: Path,
+            self, remote_full_item: FTPDirItem, local_full_path: Path, local_file_size: int
     ) -> None:
         """Скачивает один файл и проверяет итоговый размер."""
 
         # 1) Скачиваем файл
-        self._download_file_with_resume(remote_full_item, local_full_path)
+        self._download_file_with_resume(
+            remote_full_item, local_full_path, local_file_size
+        )
 
         # 2) если размер совпал — готово
         local_size = self._local_size(local_full_path)

@@ -7,6 +7,7 @@ from pydantic import (
     model_validator,
     PositiveInt,
     PositiveFloat,
+    Field,
 )
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -60,19 +61,23 @@ class AppConfig(BaseSettings):
     ftp_timeout_sec                 : PositiveFloat                 = 3
     ftp_repeat                      : PositiveInt                   = 3
     ftp_retry_delay_seconds         : PositiveFloat                 = 1
-    ftp_blocksize                   : PositiveInt                   = 64 * 1024  # > 0
+    ftp_blocksize                   : PositiveInt                   = 64 * 1024
+
+    # Файлы исключений
+    stop_list                       : list[str]                     = Field(default_factory=list)
+    add_list                        : list[str]                     = Field(default_factory=list)
 
     # Локальный репозиторий
-    local_dir                      : Path                           = Path("C:\\Дистрибутив\\PREPARE\\")
-    new_dir                        : Path | None                    = None
-    old_dir                        : Path | None                    = None
+    local_dir                       : Path                          = Path("C:\\Дистрибутив\\PREPARE\\")
+    new_dir                         : Path | None                   = None
+    old_dir                         : Path | None                   = None
 
     # Поведение
     verify_mode                     : Literal["size", "md5_hash"]    = "md5_hash"
     conflict_policy                 : Literal["FAIL", "WARN"]        = "FAIL"
 
     # Служебные файлы
-    date_file: Path = Path("date_file")
+    date_file                       : Path                          = Path("date_file")
 
     # Logging
     logging: LoggingConfig = LoggingConfig()

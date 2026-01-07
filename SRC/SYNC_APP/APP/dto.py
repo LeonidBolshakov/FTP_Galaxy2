@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Set, Union
+from typing import Set
 from ftplib import FTP
 
 from SRC.SYNC_APP.CONFIG.config import AppConfig
@@ -21,6 +21,10 @@ class FTPListError(Exception):
 
 
 class RepositorySnapshotError(Exception):
+    pass
+
+
+class LocalFileAccessError(RuntimeError):
     pass
 
 
@@ -96,7 +100,7 @@ class TransferInput:
     context             : RuntimeContext
     ftp                 : FTP
     mode                : TransferMode
-    snapshots           : Union[list[FileSnapshot], list[FileSnapshot]]
+    snapshots           : list[FileSnapshot]
 
 
 @dataclass(frozen=True)

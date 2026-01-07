@@ -12,7 +12,7 @@ from SRC.SYNC_APP.APP.dto import (
     FTPDirItem,
     FileSnapshot,
     LocalFileAccessError,
-    DownloadDirFtpInput,
+    DownloadDirError,
 )
 from SRC.SYNC_APP.ADAPTERS.ftp import Ftp
 
@@ -89,7 +89,7 @@ class TransferService:
             valid_new_snapshots = self.ensure_new_dir_ready(
                 new_dir=new_dir, old_dir=old_dir, snapshots_by_name=snapshots_by_name
             )
-        except DownloadDirFtpInput:
+        except DownloadDirError as e:
             raise
 
         valid_names = {s.name for s in valid_new_snapshots}
@@ -121,7 +121,7 @@ class TransferService:
         return f"{stem.casefold()}{suffix.casefold()}"
 
     def apply_stop_list(
-            self, data: TransferInput, snapshots: list[FileSnapshot]
+        self, data: TransferInput, snapshots: list[FileSnapshot]
     ) -> list[FileSnapshot]:
         stop_set: set[str] = {x.strip().casefold() for x in data.context.app.stop_list}
 
@@ -147,9 +147,9 @@ class TransferService:
             try:
                 self._move_to_old_same_fs(src=file_path, old_dir=old_dir)
             except (
-                    FileNotFoundError,
-                    PermissionError,
-                    OSError,
+                FileNotFoundError,
+                PermissionError,
+                OSError,
             ) as e:
                 raise RuntimeError(
                     f"Не смог переместить файл {e} из {file_path} в {old_dir}"
@@ -160,7 +160,7 @@ class TransferService:
         Path(dir_path).mkdir(parents=True, exist_ok=True)
 
     def sanitize_new_dir(
-            self, new_dir: Path, snapshots_by_name: dict[str, FileSnapshot]
+        self, new_dir: Path, snapshots_by_name: dict[str, FileSnapshot]
     ) -> None:
         for path in new_dir.iterdir():
             self._ensure_is_file_or_exit(new_dir=new_dir, path=path)
@@ -185,26 +185,37 @@ class TransferService:
         raise SystemExit(1)
 
     def _delete_if_unknown(
-            self, new_dir: Path, path: Path, snap: FileSnapshot | None
-    ) -> None:
+        self, new_dir: Path, path: Path, snap: FileSnapshot | None
+    ) -> bool:
         if snap is not None:
-            return
+            return False
 
         logger.warning(
             "Обнаружен неизвестный файл {item_in_dir} — файл будет удалён.",
             item_in_dir=path,
         )
-        path.unlink(missing_ok=True)
+        try:
+            path.unlink(missing_ok=True)
+        except PermissionError as e:
+            logger.error("Не смог удалить файл {path}:\n{e}", path=path, e=e)
+            return False
+        return True
 
     def _delete_if_oversized_or_size_zero(
-            self, new_dir: Path, path: Path, snap: FileSnapshot
+        self, new_dir: Path, path: Path, snap: FileSnapshot | None
     ) -> None:
-        local_size = self.get_local_file_size(path)
-        remote_size = snap.size
 
-        if remote_size is None or local_size > remote_size or local_size == 0:
+        local_size = self.get_local_file_size(path)
+        remote_size = snap.size if snap is not None else 0
+
+        if (
+            remote_size is None
+            or remote_size == 0
+            or local_size > remote_size
+            or local_size == 0
+        ):
             logger.warning(
-                "В директории {new_dir} размер файла {name} ({local}) больше размера на FTP ({remote})\n"
+                "В директории {new_dir} размер файла {name} ({local}) равен 0 или больше размера на FTP ({remote})\n"
                 "или размер файла на FTP неизвестен\n"
                 "файл {name} будет удалён.\n",
                 new_dir=new_dir,
@@ -215,11 +226,11 @@ class TransferService:
             path.unlink(missing_ok=True)
 
     def ensure_new_dir_ready(
-            self,
-            *,
-            new_dir: Path,
-            old_dir: Path,
-            snapshots_by_name: dict[str, FileSnapshot],
+        self,
+        *,
+        new_dir: Path,
+        old_dir: Path,
+        snapshots_by_name: dict[str, FileSnapshot],
     ) -> list[FileSnapshot]:
         """
         Если NEW пуста — просто строим локальный снапшот.
@@ -269,9 +280,9 @@ class TransferService:
 
     def _prompt_new_dir_action(self) -> NewDirAction:
         use_msvcrt = (
-                sys.platform == "win32"
-                and sys.stdin.isatty()
-                and not self._is_pycharm_console()
+            sys.platform == "win32"
+            and sys.stdin.isatty()
+            and not self._is_pycharm_console()
         )
 
         read = self._read_char_windows if use_msvcrt else input
@@ -286,7 +297,7 @@ class TransferService:
             print("Неверный выбор. Ожидается П/Н/С.")
 
     def select_size_matched_snapshots(
-            self, items_dir: list[Path], snapshots_by_name: dict[str, FileSnapshot]
+        self, items_dir: list[Path], snapshots_by_name: dict[str, FileSnapshot]
     ) -> list[FileSnapshot]:
         file_snapshots: list[FileSnapshot] = []
         for item_dir in items_dir:
@@ -300,7 +311,8 @@ class TransferService:
         for p in dir_path.iterdir():
             p.unlink(missing_ok=True)
 
-    def get_local_file_size(self, path: Path) -> Path:
+    def get_local_file_size(self, path: Path) -> int:
+        local_size = 0
         try:
             local_size = path.stat().st_size
         except FileNotFoundError:

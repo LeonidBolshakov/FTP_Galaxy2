@@ -16,6 +16,10 @@ class DownloadFileError(Exception):
     pass
 
 
+class DownloadDirError(Exception):
+    pass
+
+
 class FTPListError(Exception):
     pass
 

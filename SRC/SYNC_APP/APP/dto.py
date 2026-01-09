@@ -37,30 +37,44 @@ class LocalFileAccessError(RuntimeError):
 class RuntimeContext:
     app                 : AppConfig
     once_per_day        : bool
+    use_stop_add_lists  : bool
 
 
 @dataclass(frozen=True)
 class InvalidFile:
-    path                : str
-    error               : str
+    path                    : str
+    error                   : str
 
 @dataclass(frozen=True)
 class DiffPlan:
-    to_delete           : list[FileSnapshot]
-    to_download         : list[FileSnapshot]
-    diff_files          : list[InvalidFile]
+    to_delete               : list[FileSnapshot]
+    to_download             : list[FileSnapshot]
+    diff_files              : list[InvalidFile]
 
 
 class ModeSnapShop(Enum):
-    LITE_MODE           = auto()
-    FULL_MODE           = auto()
+    LITE_MODE               = auto()
+    FULL_MODE               = auto()
+
+class ModeDiffPlan(Enum):
+    USE_STOP_ADD_LISTS      = auto()
+    NOT_USE_STOP_ADD_LISTS  = auto()
 
 
 @dataclass(frozen=True)
 class FileSnapshot:
-    name                : str
-    size                : int | None
-    md5_hash            : str | None
+    path                    : str
+    size                    : int | None
+    md5_hash                : str | None
+
+    def _k(self) -> str:
+        return self.path.strip()
+
+    def __hash__(self) -> int:
+        return hash(self._k())
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, FileSnapshot) and self._k() == other._k()
 
 
 @dataclass(frozen=True)
@@ -89,7 +103,7 @@ class SnapshotInput:
     context             : RuntimeContext
     ftp                 : FTP
     mode                : ModeSnapShop
-    only_for            :Set | None = None
+    only_for            : Set | None = None
 
 
 @dataclass(frozen=True)
@@ -97,6 +111,7 @@ class DiffInput:
     context             : RuntimeContext
     local               : RepositorySnapshot
     remote              : RepositorySnapshot
+    use_stop_add_lists  : ModeDiffPlan
 
 
 @dataclass(frozen=True)

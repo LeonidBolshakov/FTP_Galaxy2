@@ -5,8 +5,6 @@ from SRC.SYNC_APP.ADAPTERS.ftp import Ftp
 
 from SRC.SYNC_APP.APP.dto import (
     SnapshotInput,
-    RepositorySnapshot,
-    FileSnapshot,
     FileSnapshot,
     FTPInput,
     DownloadFileError,
@@ -49,7 +47,7 @@ class SnapShotService:
 
         files = {
             items.remote_full: FileSnapshot(
-                name=items.remote_full,
+                path=items.remote_full,
                 size=items.size,
                 md5_hash=items.md5_hash,
             )

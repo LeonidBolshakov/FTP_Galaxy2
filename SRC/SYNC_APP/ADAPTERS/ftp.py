@@ -45,7 +45,7 @@ TEMP_EXCEPTIONS = (
 class MLSDFacts(TypedDict, total=False):
     """Типизированное описание facts, возвращаемых MLSD/MLST.
 
-    В ftplib mlsd() возвращает пары (name, facts), где facts — dict[str, str].
+    В ftplib mlsd() возвращает пары (path, facts), где facts — dict[str, str].
     Здесь описаны наиболее используемые поля; набор зависит от FTP-сервера.
     """
 
@@ -88,7 +88,7 @@ class _RetrWriterWithProgress:
             self._last_ts = now
 
     def finish(self) -> None:
-        print(f"\r{self.label!r}: {self.downloaded} bytes", flush=True)
+        print(f"\r<-- {self.label!r}: {self.downloaded} байт", flush=True)
 
 
 T = TypeVar("T")
@@ -333,7 +333,7 @@ class Ftp:
         ftp_root = self.ftp_input.context.app.ftp_root
         self._safe_cwd_ftp(ftp_root)
 
-        # 2) Считываем содержимое директории через MLSD (возвращает name + facts)
+        # 2) Считываем содержимое директории через MLSD (возвращает path + facts)
         raw_items = self._safe_mlsd()
 
         # 3) Формируем список элементов директории

@@ -16,7 +16,8 @@ stop_list:
   - Z_STAFFREPORTS_RES.txt
   - C_Tune_RES.txt
   - Z_Calendar_RES.txt
-add_list: [ UPDATES.sfv ]
+add_list:
+  - UPDATES.sfv
 logging:
   console:
     level: "INFO"

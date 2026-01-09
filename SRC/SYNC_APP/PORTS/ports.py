@@ -6,7 +6,6 @@ from typing import Protocol
 from SRC.SYNC_APP.APP.dto import (
     RuntimeContext,
     DiffPlan,
-    RepositorySnapshot,
     SnapshotInput,
     ExecutionChoice,
     DiffInput,

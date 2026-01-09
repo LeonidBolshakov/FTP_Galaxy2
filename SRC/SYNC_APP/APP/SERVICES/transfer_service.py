@@ -12,7 +12,7 @@ from SRC.SYNC_APP.APP.dto import (
     FTPDirItem,
     FileSnapshot,
     LocalFileAccessError,
-    DownloadDirError,
+    DownloadFileError,
 )
 from SRC.SYNC_APP.ADAPTERS.ftp import Ftp
 
@@ -52,7 +52,7 @@ class TransferService:
 
     def _move_to_old_same_fs(self, src: Path, old_dir: Path) -> None:
         """
-        Перемещает файл src в old_dir/src.name.
+        Перемещает файл src в old_dir/src.path.
         Если src исчез — молча выходим.
         """
         dst = old_dir / src.name
@@ -81,55 +81,43 @@ class TransferService:
         self.safe_mkdir(old_dir)
 
         snapshots_by_name: dict[str, FileSnapshot] = {
-            Path(snap.name).name: snap for snap in snapshots
+            Path(snap.path).name: snap for snap in snapshots
         }
 
-        try:
-            self.sanitize_new_dir(new_dir=new_dir, snapshots_by_name=snapshots_by_name)
-            valid_new_snapshots = self.ensure_new_dir_ready(
-                new_dir=new_dir, old_dir=old_dir, snapshots_by_name=snapshots_by_name
-            )
-        except DownloadDirError as e:
-            raise
+        self.sanitize_new_dir(new_dir=new_dir, snapshots_by_name=snapshots_by_name)
+        valid_new_snapshots = self.ensure_new_dir_ready(
+            new_dir=new_dir, old_dir=old_dir, snapshots_by_name=snapshots_by_name
+        )
 
-        valid_names = {s.name for s in valid_new_snapshots}
-        snapshots_to_download = [s for s in snapshots if s.name not in valid_names]
-        snapshots_to_download = self.apply_stop_list(data, snapshots_to_download)
+        valid_names = {s.path for s in valid_new_snapshots}
+        snapshots_to_download = {s for s in snapshots if s.path not in valid_names}
+        # snapshots_to_download = self.apply_stop_set(data, snapshots_to_download)
+        # snapshots_to_download = self.apply_add_set(data, snapshots_to_download)
         ### !!!!! - STOP LIST + ADD LIST - !!!!! ### - добавить
         for snapshot in snapshots_to_download:
-            remote_full = snapshot.name
+            remote_full = snapshot.path
             local_name = Path(remote_full).name
             local_full_path = new_dir / local_name
 
-            ftp.download_file(
-                remote_full_item=FTPDirItem(
-                    remote_full=remote_full,
-                    size=snapshot.size,
-                    md5_hash=snapshot.md5_hash,
-                ),
-                local_full_path=local_full_path,
-                local_file_size=self.get_local_file_size(local_full_path),
-            )
+            try:
+                ftp.download_file(
+                    remote_full_item=FTPDirItem(
+                        remote_full=remote_full,
+                        size=snapshot.size,
+                        md5_hash=snapshot.md5_hash,
+                    ),
+                    local_full_path=local_full_path,
+                    local_file_size=self.get_local_file_size(local_full_path),
+                )
+            except DownloadFileError as e:
+                import traceback
 
-    def _snapshot_name_to_stop_key(self, name: str) -> str:
-        stem, suffix = os.path.splitext(name)
-
-        base, sep, tail = stem.rpartition("_")  # только последний "_"
-        if sep and tail.isdigit():  # хвост = номер релиза
-            stem = base
-
-        return f"{stem.casefold()}{suffix.casefold()}"
-
-    def apply_stop_list(
-        self, data: TransferInput, snapshots: list[FileSnapshot]
-    ) -> list[FileSnapshot]:
-        stop_set: set[str] = {x.strip().casefold() for x in data.context.app.stop_list}
-
-        result: list[FileSnapshot] = []
-        for snap in snapshots:
-            if self._snapshot_name_to_stop_key(snap.name) not in stop_set:
-                result.append(snap)
-        return result
+                traceback.print_exc()
+                logger.error(
+                    "Файл {file} не загружен в директорию {dir}",
+                    file=remote_full,
+                    dir=new_dir,
+                )
 
     def _delete(self, data: TransferInput):
         local_dir = data.context.app.local_dir
@@ -143,7 +131,7 @@ class TransferService:
         self._assert_same_fs(local_dir, old_dir)
 
         for snapshot in snapshots:
-            file_path = Path(local_dir) / snapshot.name
+            file_path = Path(local_dir) / snapshot.path
             try:
                 self._move_to_old_same_fs(src=file_path, old_dir=old_dir)
             except (
@@ -191,7 +179,7 @@ class TransferService:
             return False
 
         logger.warning(
-            "Обнаружен неизвестный файл {item_in_dir} — файл будет удалён.",
+            "Обнаружен не запланированный к загрузке файл {item_in_dir} — файл будет удалён.",
             item_in_dir=path,
         )
         try:
@@ -215,8 +203,8 @@ class TransferService:
             or local_size == 0
         ):
             logger.warning(
-                "В директории {new_dir} размер файла {name} ({local}) равен 0 или больше размера на FTP ({remote})\n"
-                "или размер файла на FTP неизвестен\n"
+                "В директории {new_dir} размер файла {name} ({local}) равен 0\n"
+                "или больше размера на FTP ({remote}) или размер файла на FTP неизвестен\n"
                 "файл {name} будет удалён.\n",
                 new_dir=new_dir,
                 name=path.name,

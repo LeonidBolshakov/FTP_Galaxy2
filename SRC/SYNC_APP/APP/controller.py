@@ -13,6 +13,7 @@ from SRC.SYNC_APP.APP.dto import (
     SnapshotInput,
     ValidateRepositoryInput,
     ModeSnapShop,
+    ModeDiffPlan,
 )
 from SRC.SYNC_APP.PORTS.ports import (
     ExecutionGate,
@@ -27,6 +28,7 @@ from SRC.SYNC_APP.PORTS.ports import (
 class SyncController:
     def __init__(
         self,
+            ftp_parameter: FTP,
             setup_loguru: Callable,
         runtime_context: RuntimeContext,
         snapshot_service: SnapshotService,
@@ -36,6 +38,7 @@ class SyncController:
         error_handler: ErrorHandler,
         execution_gate: ExecutionGate,
     ):
+        self.ftp_parameter = ftp_parameter
         self.setup_loguru = setup_loguru
         self.runtime_context = runtime_context
         self.snapshot_service = snapshot_service
@@ -52,7 +55,7 @@ class SyncController:
         if self.execution_gate.check(self.runtime_context) == ExecutionChoice.SKIP:
             return
 
-        ftp = FTP()
+        ftp = self.ftp_parameter
         remote_before = self.snapshot_service.remote(
             SnapshotInput(self.runtime_context, ftp, ModeSnapShop.LITE_MODE)
         )
@@ -61,7 +64,12 @@ class SyncController:
         )
 
         pre_plan: DiffPlan = self.diff_planner.run(
-            DiffInput(self.runtime_context, local_before, remote_before)
+            DiffInput(
+                self.runtime_context,
+                local_before,
+                remote_before,
+                self.runtime_context.use_stop_add_lists,
+            )
         )
 
         if pre_plan.diff_files:
@@ -98,7 +106,12 @@ class SyncController:
         )
 
         post_plan: DiffPlan = self.diff_planner.run(
-            DiffInput(self.runtime_context, local_after, remote_after)
+            DiffInput(
+                context=self.runtime_context,
+                local=local_after,
+                remote=remote_after,
+                use_stop_add_lists=ModeDiffPlan.NOT_USE_STOP_ADD_LISTS,
+            )
         )
 
         if post_plan.diff_files:

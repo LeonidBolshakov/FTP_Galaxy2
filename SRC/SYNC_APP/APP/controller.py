@@ -83,13 +83,13 @@ class SyncController:
 
         self.transfer_service.run(
             TransferInput(
-                self.runtime_context, ftp, TransferMode.download, pre_plan.to_download
+                self.runtime_context, ftp, TransferMode.delete, pre_plan.to_delete
             )
         )
 
         self.transfer_service.run(
             TransferInput(
-                self.runtime_context, ftp, TransferMode.delete, pre_plan.to_delete
+                self.runtime_context, ftp, TransferMode.download, pre_plan.to_download
             )
         )
 
@@ -98,7 +98,6 @@ class SyncController:
                 self.runtime_context, ftp, ModeSnapShop.FULL_MODE, only_for=set()
             )
         )
-        # Необосновано чистит NEW
         local_after = self.snapshot_service.local(
             SnapshotInput(
                 self.runtime_context, ftp, ModeSnapShop.FULL_MODE, only_for=set()

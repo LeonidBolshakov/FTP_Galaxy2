@@ -85,7 +85,7 @@ class AppConfig(BaseSettings):
 
     @model_validator(mode="after")
     def _derive_dirs(self) -> Self:
-        # если new_dir/old_dir не заданы в YAML — считаем от local_dir
+        # если new_dir/target не заданы в YAML — считаем от local_dir
         if self.new_dir is None:
             self.new_dir = self.local_dir / "NEW"
         if self.old_dir is None:

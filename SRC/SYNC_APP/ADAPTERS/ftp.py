@@ -55,20 +55,6 @@ class MLSDFacts(TypedDict, total=False):
     create: str
 
 
-class ResumingFileDownloadError(Exception):
-    """Ошибка при попытке докачки (REST) или при использовании механизма resume.
-
-    Используется как отдельный тип исключения, чтобы различать:
-      - первичную загрузку (DownloadFileError);
-      - повторную попытку с докачкой (ResumingFileDownloadError).
-
-    Это позволяет вызывающему коду выбирать стратегию: перезапуск с нуля,
-    переход в режим докачки или немедленный фейл.
-    """
-
-    pass
-
-
 @dataclass
 class _RetrWriterWithProgress:
     f: BinaryIO
@@ -222,7 +208,7 @@ class Ftp:
         """Подключение к FTP через _ftp_call() (с ретраями на временных сбоях)."""
         self._ftp_call(
             lambda: self.ftp.connect(host, timeout=time_out),
-            what=f"подключении к FTP серверу {host!r}",
+            what=f"подключен. к FTP серверу {host!r}",
             err_cls=ConnectError,
             temp_log=f"Не удалось подключиться к {host!r}",
         )
@@ -278,7 +264,7 @@ class Ftp:
         """Переход на директорию с ретраями"""
         self._ftp_call(
             lambda: self.ftp.cwd(path),
-            what=f"переходе к директории {path!r}",
+            what=f"перех. к директории {path!r}",
             err_cls=FTPListError,
             temp_log=f"Сбой/таймаут при чтении директории {path!r}",
         )
@@ -287,7 +273,7 @@ class Ftp:
         """MLSD с ретраями."""
         return self._ftp_call(
             lambda: cast(list[tuple[str, MLSDFacts]], list(self.ftp.mlsd())),
-            what="MLSD",
+            what="чтен. MLSD",
             err_cls=FTPListError,
             temp_log="Сбой/таймаут при чтении MLSD. Проверьте есть ли MLSD на FTP сервере.",
         )
@@ -384,7 +370,6 @@ class Ftp:
         self.make_safe_dir_name(local_full_name)
 
         mode: Literal["ab", "wb"] = "ab" if offset else "wb"
-        err_cls = DownloadFileError if offset == 0 else ResumingFileDownloadError
 
         with open(local_full_name, mode) as f:
             writer = _RetrWriterWithProgress(
@@ -394,8 +379,8 @@ class Ftp:
             try:
                 self._ftp_call(
                     lambda: self._retrbinary_with_resume(remote_full_name, f, writer),
-                    what=f"загрузка файла {remote_full_name!r}",
-                    err_cls=err_cls,
+                    what=f"загруз. файла {remote_full_name!r}",
+                    err_cls=DownloadFileError,
                     temp_log=f"Сбой/таймаут при загрузке файла {remote_full_name!r}",
                 )
             finally:
@@ -425,9 +410,9 @@ class Ftp:
                 local_full_name=local_full_name,
                 offset=offset,
             )
-        except ResumingFileDownloadError as e:
+        except DownloadFileError as e:
             raise DownloadFileError(
-                f"Ошибка при догрузке файла {remote_full_name!r}: {e}"
+                f"Ошибка при загрузке файла {remote_full_name!r}:\n{e}"
             ) from e
 
     def _try_resume_after_failure(
@@ -532,7 +517,7 @@ class Ftp:
 
         responses = self._ftp_call(
             lambda: self.ftp.sendcmd(f"XMD5 {full_remote}"),
-            what=f"XMD5 для {full_remote!r}",
+            what=f"чтен. XMD5 для {full_remote!r}",
             err_cls=DownloadFileError,
             temp_log=f"Сбой/таймаут при чтении XMD5 для файла {full_remote!r}",
         )

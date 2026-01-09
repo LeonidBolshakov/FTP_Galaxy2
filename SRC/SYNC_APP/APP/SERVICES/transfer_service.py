@@ -4,6 +4,7 @@ import os
 import sys
 import shutil
 import tempfile
+from typing import Callable
 
 from loguru import logger
 
@@ -51,17 +52,29 @@ class TransferService:
         elif mode == TransferMode.delete:
             self._delete(data)
 
-    def _safe_copy_move_file(self, src: Path, dst: Path, copy: bool) -> None:
-        """Перемещает src в target (полный путь назначения). Если src исчез — выходим."""
+    def _safe_copy(self, src: Path, dst: Path) -> None:
+        if not src.exists():
+            return
+
+        fd, tmp_name = tempfile.mkstemp(prefix=f".{dst.name}.", dir=dst.parent)
+        tmp = Path(tmp_name)
+        os.close(fd)
         try:
-            if copy:
-                fd, tmp_name = tempfile.mkstemp(prefix=f".{dst.name}.", dir=dst.parent)
-                tmp = Path(tmp_name)
-                os.close(fd)
-                shutil.copy2(src, tmp)
-                tmp.replace(dst)
-            else:
-                src.replace(dst)
+            shutil.copy2(src, tmp)
+            tmp.replace(dst)
+
+        except FileNotFoundError:
+            if not src.exists():  # race: src мог исчезнуть
+                return
+            raise  # скорее всего ошибка в dst
+
+        except Exception:
+            tmp.unlink()
+            raise
+
+    def _safe_move(self, src: Path, dst: Path) -> None:
+        try:
+            src.replace(dst)
         except FileNotFoundError:
             if not src.exists():  # race: src мог исчезнуть
                 return
@@ -80,7 +93,7 @@ class TransferService:
         ftp = Ftp(FTPInput(data.context, data.ftp))
         snapshots = data.snapshots
 
-        new_dir, old_dir = self._prepare_work_dirs(data)
+        local_dir, new_dir, old_dir = self._prepare_official_dirs(data)
 
         snapshots_by_name = self._index_snapshots_by_name(snapshots)
 
@@ -95,24 +108,30 @@ class TransferService:
             snapshots, valid_new_snapshots
         )
 
-        self._download_snapshots(ftp, snapshots_to_download, new_dir)
+        self._download_snapshot_files(ftp, snapshots_to_download, new_dir)
 
-        self._finalize_transfer(snapshots, new_dir, data.context.app.local_dir)
+        self._copy_local_files(
+            snapshots=snapshots_to_download,
+            from_dir=new_dir,
+            to_dir=local_dir,
+        )
 
     # --- 1) Подготовка директорий NEW/OLD
-    def _prepare_work_dirs(self, data: TransferInput) -> tuple[Path, Path]:
+    def _prepare_official_dirs(self, data: TransferInput) -> tuple[Path, Path, Path]:
+        local_dir = data.context.app.local_dir
         new_dir = data.context.app.new_dir_path
         old_dir = data.context.app.old_dir_path
+        self.safe_mkdir(local_dir)
         self.safe_mkdir(new_dir)
         self.safe_mkdir(old_dir)
-        return new_dir, old_dir
+        return local_dir, new_dir, old_dir
 
     # --- 2) Индексация снапшотов по имени файла
     def _index_snapshots_by_name(
             self, snapshots: list[FileSnapshot]
     ) -> dict[str, FileSnapshot]:
         # Для FTP-путей безопаснее PurePosixPath (если там "/"), чем Path на Windows
-        return {PurePosixPath(snap.path).name: snap for snap in snapshots}
+        return {self._snapshot_name(snap): snap for snap in snapshots}
 
     # --- 3) Определение, что ещё нужно скачать
     def _select_snapshots_to_download(
@@ -124,11 +143,11 @@ class TransferService:
         return [s for s in snapshots if s.path not in valid_paths]
 
     # --- 4) Загрузка файлов
-    def _download_snapshots(
+    def _download_snapshot_files(
             self, ftp: Ftp, snapshots_to_download: list[FileSnapshot], new_dir: Path
     ) -> None:
         if snapshots_to_download:
-            print("Начинаме загрузку файлов")
+            print("Начинаем загрузку файлов")
 
         for snapshot in snapshots_to_download:
             self._download_one_snapshot(ftp, snapshot, new_dir)
@@ -138,7 +157,8 @@ class TransferService:
             self, ftp: Ftp, snapshot: FileSnapshot, new_dir: Path
     ) -> None:
         remote_full = snapshot.path
-        local_name = PurePosixPath(remote_full).name
+        # local_name = self._snapshot_name(remote_full)
+        local_name = self._snapshot_name(snapshot)
         local_full_path = new_dir / local_name
 
         try:
@@ -147,11 +167,16 @@ class TransferService:
                 local_full_path=local_full_path,
                 local_file_size=self.get_local_file_size(local_full_path),
             )
-        except DownloadFileError:
+        except DownloadFileError as e:
+            try:
+                local_full_path.unlink(missing_ok=True)
+            except Exception:
+                pass
             logger.error(
-                "Файл {file} не загружен в директорию {dir}",
+                "Файл {file} не загружен в директорию {dir}\n{e}",
                 file=remote_full,
                 dir=new_dir,
+                e=e,
             )
 
     # --- 6) Построение FTPDirItem из снапшота
@@ -162,29 +187,14 @@ class TransferService:
             md5_hash=snapshot.md5_hash,
         )
 
-    # --- 7) Финализация: перенос/удаление локальных файлов
-    def _finalize_transfer(
-            self, snapshots: list[FileSnapshot], from_dir: Path, to_dir: Path
-    ) -> None:
-        self._copy_remove_local_files(
-            snapshots=snapshots,
-            from_dir=from_dir,
-            to_dir=to_dir,
-            copy=True,
-        )
-
     def _delete(self, data: TransferInput):
-        local_dir = data.context.app.local_dir
-        self.safe_mkdir(local_dir)
 
-        old_dir = data.context.app.old_dir_path
-        self.safe_mkdir(old_dir)
+        local_dir, _, old_dir = self._prepare_official_dirs(data)
 
-        self._copy_remove_local_files(
+        self._move_local_files(
             snapshots=data.snapshots,
             from_dir=local_dir,
             to_dir=old_dir,
-            copy=False,
         )
 
     def safe_mkdir(self, dir_path: Path) -> None:
@@ -340,7 +350,8 @@ class TransferService:
 
     def clean_dir(self, dir_path: Path) -> None:
         for p in dir_path.iterdir():
-            p.unlink(missing_ok=True)
+            if p.is_file():
+                p.unlink(missing_ok=True)
 
     def get_local_file_size(self, path: Path) -> int:
         local_size = 0
@@ -357,22 +368,48 @@ class TransferService:
 
         return local_size
 
-    def _copy_remove_local_files(
+    def _copy_local_files(
             self,
             snapshots: list[FileSnapshot],
             from_dir: Path,
             to_dir: Path,
-            copy: bool = True,
     ) -> None:
 
-        if not copy:
-            self._assert_same_fs(from_dir, to_dir)
+        self._help_copy_or_move(
+            callback=self._safe_copy,
+            snapshots=snapshots,
+            from_dir=from_dir,
+            to_dir=to_dir,
+        )
 
+    def _move_local_files(
+            self,
+            snapshots: list[FileSnapshot],
+            from_dir: Path,
+            to_dir: Path,
+    ) -> None:
+
+        self._assert_same_fs(from_dir, to_dir)
+
+        self._help_copy_or_move(
+            callback=self._safe_move,
+            snapshots=snapshots,
+            from_dir=from_dir,
+            to_dir=to_dir,
+        )
+
+    def _help_copy_or_move(
+            self,
+            callback: Callable[[Path, Path], None],
+            snapshots: list[FileSnapshot],
+            from_dir: Path,
+            to_dir: Path,
+    ) -> None:
         for snapshot in snapshots:
-            from_path = Path(from_dir) / Path(snapshot.path).name
-            to_path = Path(to_dir) / Path(snapshot.path).name
+            from_path = Path(from_dir) / self._snapshot_name(snapshot)
+            to_path = Path(to_dir) / self._snapshot_name(snapshot)
             try:
-                self._safe_copy_move_file(src=from_path, dst=to_path, copy=copy)
+                callback(from_path, to_path)
             except (
                     FileNotFoundError,
                     PermissionError,
@@ -382,3 +419,6 @@ class TransferService:
                     f"Не смог переместить файл из {from_path} в {to_dir}\n{e}"
                 ) from e
         return
+
+    def _snapshot_name(self, snap: FileSnapshot) -> str:
+        return PurePosixPath(snap.path).name

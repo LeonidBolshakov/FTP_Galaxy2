@@ -37,7 +37,7 @@ class LocalFileAccessError(RuntimeError):
 class RuntimeContext:
     app                 : AppConfig
     once_per_day        : bool
-    use_stop_add_lists  : bool
+    use_stop_list       : bool
 
 
 @dataclass(frozen=True)
@@ -57,8 +57,8 @@ class ModeSnapShop(Enum):
     FULL_MODE               = auto()
 
 class ModeDiffPlan(Enum):
-    USE_STOP_ADD_LISTS      = auto()
-    NOT_USE_STOP_ADD_LISTS  = auto()
+    USE_STOP_LIST           = auto()
+    NOT_USE_STOP_LIST       = auto()
 
 
 @dataclass(frozen=True)
@@ -111,7 +111,7 @@ class DiffInput:
     context             : RuntimeContext
     local               : RepositorySnapshot
     remote              : RepositorySnapshot
-    use_stop_add_lists  : ModeDiffPlan
+    use_stop_list       : ModeDiffPlan
 
 
 @dataclass(frozen=True)

@@ -68,7 +68,11 @@ class SyncController:
                 self.runtime_context,
                 local_before,
                 remote_before,
-                self.runtime_context.use_stop_add_lists,
+                (
+                    ModeDiffPlan.USE_STOP_LIST
+                    if self.runtime_context.use_stop_list
+                    else ModeDiffPlan.USE_STOP_LIST
+                ),
             )
         )
 
@@ -109,7 +113,7 @@ class SyncController:
                 context=self.runtime_context,
                 local=local_after,
                 remote=remote_after,
-                use_stop_add_lists=ModeDiffPlan.NOT_USE_STOP_ADD_LISTS,
+                use_stop_list=ModeDiffPlan.NOT_USE_STOP_LIST,
             )
         )
 

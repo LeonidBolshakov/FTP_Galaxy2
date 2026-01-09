@@ -5,8 +5,8 @@ import argparse
 from SRC.SYNC_APP.APP.dto import ModeDiffPlan
 
 _MODE_MAP = {
-    "stop-add": ModeDiffPlan.USE_STOP_ADD_LISTS,
-    "no-lists": ModeDiffPlan.NOT_USE_STOP_ADD_LISTS,
+    "stop-list": ModeDiffPlan.USE_STOP_LIST,
+    "no-list": ModeDiffPlan.NOT_USE_STOP_LIST,
 }
 
 
@@ -39,7 +39,7 @@ def parse_args() -> argparse.Namespace:
         "--mode",
         type=mode_type,
         choices=list(_MODE_MAP.values()),
-        default=ModeDiffPlan.USE_STOP_ADD_LISTS,
-        help="Режим diff-плана: stop-add (использовать stop/add списки) | no-lists (не использовать списки)",
+        default=ModeDiffPlan.USE_STOP_LIST,
+        help="Режим diff-плана: stop-list (использовать stop список) | no-list (не использовать список)",
     )
     return p.parse_args()

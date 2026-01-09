@@ -100,13 +100,16 @@ class DiffPlanner:
 
     # 4) Применение stop/add списков (если включено)
     def _apply_stop_add_lists(self, data: DiffInput, download: set[str]) -> set[str]:
-        if data.use_stop_add_lists != ModeDiffPlan.USE_STOP_ADD_LISTS:
-            return download
 
         # работаем с копией, чтобы не мутировать входной set снаружи
         result = set(download)
-        result -= self.apply_stop_set(data, result)
+        if data.context.use_stop_list == ModeDiffPlan.USE_STOP_LIST:
+            result -= self.apply_stop_set(data, result)
+
         result |= self.apply_add_set(data, result)
+        if len(result) == len(data.context.app.add_list):
+            result.clear()
+
         return result
 
     # 5) Сбор FileSnapshot по именам

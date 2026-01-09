@@ -27,7 +27,7 @@ def main():
     runtime = RuntimeContext(
         app=app,
         once_per_day=args.once_per_day,
-        use_stop_add_lists=args.mode,
+        use_stop_list=args.mode,
     )
 
     ftp_parameter = FTP()

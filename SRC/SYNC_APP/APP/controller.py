@@ -1,19 +1,19 @@
-from ftplib import FTP
-from typing import Callable
-
 from SRC.SYNC_APP.APP.dto import (
     RuntimeContext,
     ExecutionChoice,
     DiffPlan,
-    ErrorNumber,
-    TransferMode,
-    ErrorEvent,
     TransferInput,
     DiffInput,
     SnapshotInput,
     ValidateRepositoryInput,
-    ModeSnapShop,
+    ModeSnapshot,
     ModeDiffPlan,
+    ValidateInput,
+    ReportItemInput,
+    ReportItems,
+    Ftp,
+    RepositorySnapshot,
+    FileSnapshot,
 )
 from SRC.SYNC_APP.PORTS.ports import (
     ExecutionGate,
@@ -21,122 +21,164 @@ from SRC.SYNC_APP.PORTS.ports import (
     DiffPlanner,
     TransferService,
     RepositoryValidator,
-    ErrorHandler,
+    ValidateAndSaveService,
+    ReportService,
 )
 
 
 class SyncController:
     def __init__(
         self,
-            ftp_parameter: FTP,
-            setup_loguru: Callable,
+            ftp: Ftp,
         runtime_context: RuntimeContext,
         snapshot_service: SnapshotService,
         diff_planner: DiffPlanner,
         transfer_service: TransferService,
         repository_validator: RepositoryValidator,
-        error_handler: ErrorHandler,
+            validate_and_save_service: ValidateAndSaveService,
         execution_gate: ExecutionGate,
+            report_service: ReportService,
     ):
-        self.ftp_parameter = ftp_parameter
-        self.setup_loguru = setup_loguru
+        self.ftp = ftp
         self.runtime_context = runtime_context
         self.snapshot_service = snapshot_service
         self.diff_planner = diff_planner
         self.transfer_service = transfer_service
         self.repository_validator = repository_validator
-        self.error_handler = error_handler
+        self.validate_and_save_service = validate_and_save_service
         self.execution_gate = execution_gate
+        self.report_service = report_service
 
-    # fmt: on
     def run(self) -> None:
-        self.setup_loguru(self.runtime_context)
-
         if self.execution_gate.check(self.runtime_context) == ExecutionChoice.SKIP:
             return
 
-        ftp = self.ftp_parameter
-        remote_before = self.snapshot_service.remote(
-            SnapshotInput(self.runtime_context, ftp, ModeSnapShop.LITE_MODE)
-        )
-        local_before = self.snapshot_service.local(
-            SnapshotInput(self.runtime_context, ftp, ModeSnapShop.LITE_MODE)
-        )
+        general_report: ReportItems = []
 
-        pre_plan: DiffPlan = self.diff_planner.run(
-            DiffInput(
-                self.runtime_context,
-                local_before,
-                remote_before,
-                (
-                    ModeDiffPlan.USE_STOP_LIST
-                    if self.runtime_context.use_stop_list
-                    else ModeDiffPlan.USE_STOP_LIST
-                ),
+        local_before, remote_before = self._get_lite_snapshots()
+
+        pre_plan = self._plan_diff(local=local_before, remote=remote_before)
+
+        general_report.extend(pre_plan.report_plan)
+
+        self._download_if_needed(plan=pre_plan)
+
+        local_after, remote_after = self._get_full_snapshots_only_for(plan=pre_plan)
+
+        is_validate_commit, report_validate = self._validate_and_commit(
+            local=local_after, remote=remote_after, delete=pre_plan.to_delete
+        )
+        general_report.extend(report_validate)
+
+        conflicts_report: ReportItems = self._validate_repository(local=local_after)
+        general_report.extend(conflicts_report)
+
+        self._report(is_validate_commit=is_validate_commit, report=general_report)
+
+    def _get_lite_snapshots(self) -> tuple[RepositorySnapshot, RepositorySnapshot]:
+        local_before = self.snapshot_service.local(
+            SnapshotInput(
+                context=self.runtime_context,
+                mode=ModeSnapshot.LITE_MODE,
+                local=self.runtime_context.app.local_dir,
+            )
+        )
+        remote_before = self.snapshot_service.remote(
+            SnapshotInput(
+                context=self.runtime_context,
+                mode=ModeSnapshot.LITE_MODE,
+                ftp=self.ftp,
             )
         )
 
-        if pre_plan.diff_files:
-            self.error_handler.run(
-                ErrorEvent(
-                    self.runtime_context,
-                    ErrorNumber.diff_pre_files,
-                    pre_plan.diff_files,
+        return local_before, remote_before
+
+    def _plan_diff(
+            self, local: RepositorySnapshot, remote: RepositorySnapshot
+    ) -> DiffPlan:
+
+        stop_list_mode = (
+            ModeDiffPlan.USE_STOP_LIST
+            if self.runtime_context.use_stop_list
+            else ModeDiffPlan.NOT_USE_STOP_LIST
+        )
+
+        plan: DiffPlan = self.diff_planner.run(
+            DiffInput(
+                context=self.runtime_context,
+                local=local,
+                remote=remote,
+                stop_list_mode=stop_list_mode,
+            )
+        )
+
+        return plan
+
+    def _download_if_needed(self, plan: DiffPlan) -> None:
+        if plan.to_download:
+            self.transfer_service.run(
+                TransferInput(
+                    context=self.runtime_context,
+                    ftp=self.ftp,
+                    snapshots=plan.to_download,
                 )
             )
 
-        self.transfer_service.run(
-            TransferInput(
-                self.runtime_context, ftp, TransferMode.delete, pre_plan.to_delete
-            )
-        )
+    def _get_full_snapshots_only_for(
+            self, plan: DiffPlan
+    ) -> tuple[RepositorySnapshot, RepositorySnapshot]:
+        only_for = {s.name.strip() for s in plan.to_download}
 
-        self.transfer_service.run(
-            TransferInput(
-                self.runtime_context, ftp, TransferMode.download, pre_plan.to_download
+        local_after = self.snapshot_service.local(
+            SnapshotInput(
+                context=self.runtime_context,
+                mode=ModeSnapshot.FULL_MODE,
+                local=self.runtime_context.app.new_dir,
+                only_for=only_for,
             )
         )
 
         remote_after = self.snapshot_service.remote(
             SnapshotInput(
-                self.runtime_context, ftp, ModeSnapShop.FULL_MODE, only_for=set()
-            )
-        )
-        local_after = self.snapshot_service.local(
-            SnapshotInput(
-                self.runtime_context, ftp, ModeSnapShop.FULL_MODE, only_for=set()
-            )
-        )
-
-        post_plan: DiffPlan = self.diff_planner.run(
-            DiffInput(
                 context=self.runtime_context,
-                local=local_after,
-                remote=remote_after,
-                use_stop_list=ModeDiffPlan.NOT_USE_STOP_LIST,
+                ftp=self.ftp,
+                mode=ModeSnapshot.FULL_MODE,
+                only_for=only_for,
             )
         )
 
-        if post_plan.diff_files:
-            self.error_handler.run(
-                ErrorEvent(
-                    self.runtime_context,
-                    ErrorNumber.diff_download_files,
-                    post_plan.diff_files,
-                )
-            )
+        return local_after, remote_after
 
-        conflicts = self.repository_validator.run(
-            ValidateRepositoryInput(self.runtime_context, local_after)
+    def _validate_and_commit(
+            self,
+            local: RepositorySnapshot,
+            remote: RepositorySnapshot,
+            delete: list[FileSnapshot],
+    ) -> tuple[bool, ReportItems]:
+        is_validate_commit, report_validate = self.validate_and_save_service.validate(
+            ValidateInput(
+                context=self.runtime_context, local=local, remote=remote, delete=delete
+            )
         )
 
-        if conflicts:
-            self.error_handler.run(
-                ErrorEvent(
-                    self.runtime_context,
-                    code=ErrorNumber.conflict_files,
-                    details=conflicts,
-                )
+        if is_validate_commit:
+            self.validate_and_save_service.commit_keep_new_old_files(
+                data=self.runtime_context
             )
+            self.execution_gate.record_run(ctx=self.runtime_context)
 
-        self.execution_gate.record_run(self.runtime_context)
+        return is_validate_commit, report_validate
+
+    def _validate_repository(self, local) -> ReportItems:
+        return self.repository_validator.run(
+            ValidateRepositoryInput(self.runtime_context, local)
+        )
+
+    def _report(self, is_validate_commit: bool, report: ReportItems):
+        self.report_service.run(
+            ReportItemInput(
+                context=self.runtime_context,
+                is_validate_commit=is_validate_commit,
+                report=report,
+            ),
+        )

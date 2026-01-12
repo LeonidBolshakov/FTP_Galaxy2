@@ -10,10 +10,11 @@ from SRC.SYNC_APP.APP.dto import (
     ExecutionChoice,
     DiffInput,
     TransferInput,
-    ErrorEvent,
-    VersionConflictGroup,
+    ValidateInput,
     ValidateRepositoryInput,
     RepositorySnapshot,
+    ReportItems,
+    ReportItemInput,
 )
 
 
@@ -40,11 +41,18 @@ class TransferService(Protocol):
     def run(self, data: TransferInput) -> None: ...
 
 
+# ---------- Сверка скаченных файлов с эталоном и, при необходимости, перенос файлов
+class ValidateAndSaveService(Protocol):
+    def validate(self, data: ValidateInput) -> tuple[bool, ReportItems]: ...
+
+    def commit_keep_new_old_files(self, data: RuntimeContext) -> None: ...
+
+
+# ---------- Вывод сводного отчёта
+class ReportService(Protocol):
+    def run(self, data: ReportItemInput) -> None: ...
+
+
 # ---------- validator ----------
 class RepositoryValidator(Protocol):
-    def run(self, data: ValidateRepositoryInput) -> list[VersionConflictGroup]: ...
-
-
-# ---------- errors ----------
-class ErrorHandler(Protocol):
-    def run(self, event: ErrorEvent) -> None: ...
+    def run(self, data: ValidateRepositoryInput) -> ReportItems: ...

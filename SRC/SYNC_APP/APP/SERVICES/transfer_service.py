@@ -2,22 +2,19 @@ from pathlib import Path, PurePosixPath
 from enum import Enum, auto
 import os
 import sys
-import shutil
-import tempfile
-from typing import Callable
+from typing import assert_never
 
 from loguru import logger
 
 from SRC.SYNC_APP.APP.dto import (
     TransferInput,
-    TransferMode,
-    FTPInput,
     FTPDirItem,
     FileSnapshot,
     LocalFileAccessError,
     DownloadFileError,
+    ConfigError,
+    Ftp,
 )
-from SRC.SYNC_APP.ADAPTERS.ftp import Ftp
 
 
 # fmt: off
@@ -46,58 +43,12 @@ MAPPING = {
 
 class TransferService:
     def run(self, data: TransferInput) -> None:
-        mode = data.mode
-        if mode == TransferMode.download:
-            self._download(data)
-        elif mode == TransferMode.delete:
-            self._delete(data)
-
-    def _safe_copy(self, src: Path, dst: Path) -> None:
-        if not src.exists():
-            return
-
-        fd, tmp_name = tempfile.mkstemp(prefix=f".{dst.name}.", dir=dst.parent)
-        tmp = Path(tmp_name)
-        os.close(fd)
-        try:
-            shutil.copy2(src, tmp)
-            tmp.replace(dst)
-
-        except FileNotFoundError:
-            if not src.exists():  # race: src мог исчезнуть
-                return
-            raise  # скорее всего ошибка в dst
-
-        except Exception:
-            tmp.unlink()
-            raise
-
-    def _safe_move(self, src: Path, dst: Path) -> None:
-        try:
-            src.replace(dst)
-        except FileNotFoundError:
-            if not src.exists():  # race: src мог исчезнуть
-                return
-            raise  # скорее всего ошибка в dst
-
-    @staticmethod
-    def _assert_same_fs(src: Path, old_dir: Path) -> None:
-        # Проверить один и тот же диск (C:, D: ...)
-        if src.resolve().drive.lower() != old_dir.resolve().drive.lower():
-            raise ValueError(
-                f"OLD должен быть на том же диске, что и репозиторий: "
-                f"OLD - {old_dir.resolve().drive} и репозиторий - {src.resolve().drive}"
-            )
-
-    def _download(self, data: TransferInput) -> None:
-        ftp = Ftp(FTPInput(data.context, data.ftp))
+        ftp = data.ftp
         snapshots = data.snapshots
 
         local_dir, new_dir, old_dir = self._prepare_official_dirs(data)
-
         snapshots_by_name = self._index_snapshots_by_name(snapshots)
 
-        self._sanitize_new_dir(new_dir=new_dir, snapshots_by_name=snapshots_by_name)
         valid_new_snapshots = self._ensure_new_dir_ready(
             new_dir=new_dir,
             old_dir=old_dir,
@@ -108,13 +59,29 @@ class TransferService:
             snapshots, valid_new_snapshots
         )
 
+        self._sanitize_new_dir(new_dir=new_dir, snapshots=snapshots_by_name)
+
         self._download_snapshot_files(ftp, snapshots_to_download, new_dir)
 
-        self._copy_local_files(
-            snapshots=snapshots_to_download,
-            from_dir=new_dir,
-            to_dir=local_dir,
-        )
+    @staticmethod
+    def _assert_same_fs(old_dir: Path, local_dir: Path) -> None:
+        try:
+            local_stat = local_dir.stat()
+        except OSError as e:
+            raise ConfigError(f"Некорректный путь local_dir: {local_dir!r}") from e
+
+        try:
+            old_stat = old_dir.stat()
+        except OSError as e:
+            raise ConfigError(f"Некорректный путь old_dir: {old_dir!r}") from e
+
+        if local_stat.st_dev != old_stat.st_dev:
+            # drive удобно на Windows, но на POSIX может быть пустым — поэтому оставим ещё и полный путь
+            raise ConfigError(
+                "Папки local_dir и old_dir должны быть в одном файловом разделе:\n"
+                f"local_dir={local_dir} (drive={local_dir.resolve().drive})\n"
+                f"old_dir={old_dir} (drive={old_dir.resolve().drive})"
+            )
 
     # --- 1) Подготовка директорий NEW/OLD
     def _prepare_official_dirs(self, data: TransferInput) -> tuple[Path, Path, Path]:
@@ -130,7 +97,6 @@ class TransferService:
     def _index_snapshots_by_name(
             self, snapshots: list[FileSnapshot]
     ) -> dict[str, FileSnapshot]:
-        # Для FTP-путей безопаснее PurePosixPath (если там "/"), чем Path на Windows
         return {self._snapshot_name(snap): snap for snap in snapshots}
 
     # --- 3) Определение, что ещё нужно скачать
@@ -139,15 +105,15 @@ class TransferService:
             snapshots: list[FileSnapshot],
             valid_new_snapshots: list[FileSnapshot],
     ) -> list[FileSnapshot]:
-        valid_paths = {s.path for s in valid_new_snapshots}
-        return [s for s in snapshots if s.path not in valid_paths]
+        valid_paths = {s.name for s in valid_new_snapshots}
+        return [s for s in snapshots if s.name not in valid_paths]
 
     # --- 4) Загрузка файлов
     def _download_snapshot_files(
             self, ftp: Ftp, snapshots_to_download: list[FileSnapshot], new_dir: Path
     ) -> None:
         if snapshots_to_download:
-            print("Начинаем загрузку файлов")
+            print("Загрузка файлов")
 
         for snapshot in snapshots_to_download:
             self._download_one_snapshot(ftp, snapshot, new_dir)
@@ -156,25 +122,24 @@ class TransferService:
     def _download_one_snapshot(
             self, ftp: Ftp, snapshot: FileSnapshot, new_dir: Path
     ) -> None:
-        remote_full = snapshot.path
-        # local_name = self._snapshot_name(remote_full)
-        local_name = self._snapshot_name(snapshot)
-        local_full_path = new_dir / local_name
+        remote_name = snapshot.name
+        local_name = Path(self._snapshot_name(snapshot))
+        local_name = new_dir / local_name
 
         try:
             ftp.download_file(
-                remote_full_item=self._ftp_item_from_snapshot(snapshot),
-                local_full_path=local_full_path,
-                local_file_size=self.get_local_file_size(local_full_path),
+                remote_item=self._ftp_item_from_snapshot(snapshot),
+                local_name=local_name,
+                local_file_size=self.get_local_file_size(local_name),
             )
         except DownloadFileError as e:
             try:
-                local_full_path.unlink(missing_ok=True)
+                local_name.unlink(missing_ok=True)
             except Exception:
                 pass
             logger.error(
                 "Файл {file} не загружен в директорию {dir}\n{e}",
-                file=remote_full,
+                file=remote_name,
                 dir=new_dir,
                 e=e,
             )
@@ -182,89 +147,40 @@ class TransferService:
     # --- 6) Построение FTPDirItem из снапшота
     def _ftp_item_from_snapshot(self, snapshot: FileSnapshot) -> FTPDirItem:
         return FTPDirItem(
-            remote_full=snapshot.path,
+            remote_name=snapshot.name,
             size=snapshot.size,
             md5_hash=snapshot.md5_hash,
-        )
-
-    def _delete(self, data: TransferInput):
-
-        local_dir, _, old_dir = self._prepare_official_dirs(data)
-
-        self._move_local_files(
-            snapshots=data.snapshots,
-            from_dir=local_dir,
-            to_dir=old_dir,
         )
 
     def safe_mkdir(self, dir_path: Path) -> None:
         Path(dir_path).mkdir(parents=True, exist_ok=True)
 
     def _sanitize_new_dir(
-        self, new_dir: Path, snapshots_by_name: dict[str, FileSnapshot]
+            self, new_dir: Path, snapshots: dict[str, FileSnapshot]
     ) -> None:
-        for path in new_dir.iterdir():
-            self._ensure_is_file_or_exit(new_dir=new_dir, path=path)
-            snap = snapshots_by_name.get(path.name)
+        for name in new_dir.iterdir():
+            self._ensure_is_file_or_exit(new_dir=new_dir, name=name)
+            if name.name not in snapshots:
+                self._unknown_file(new_dir=new_dir, path=name)
 
-            if self._delete_if_unknown(new_dir=new_dir, path=path, snap=snap):
-                continue
-
-            self._delete_if_oversized_or_size_zero(
-                new_dir=new_dir, path=path, snap=snap
-            )
-
-    def _ensure_is_file_or_exit(self, new_dir: Path, path: Path) -> None:
-        if path.is_file():
+    def _ensure_is_file_or_exit(self, new_dir: Path, name: Path) -> None:
+        if (new_dir / name).is_file():
             return
 
         logger.error(
             "В директории {dir} найден не-файл: {item_in_dir}. Программа прекращает работу.",
             dir=new_dir,
-            item_in_dir=path,
+            item_in_dir=name,
         )
         raise SystemExit(1)
 
-    def _delete_if_unknown(
-        self, new_dir: Path, path: Path, snap: FileSnapshot | None
-    ) -> bool:
-        if snap is not None:
-            return False
-
+    def _unknown_file(self, new_dir: Path, path: Path) -> None:
         logger.warning(
-            "Обнаружен не запланированный к загрузке файл {item_in_dir} — файл будет удалён.",
-            item_in_dir=path,
+            "В директории {new_dir}\n"
+            "обнаружен не запланированный к загрузке или уже загруженный файл {name}",
+            new_dir=new_dir,
+            path=path.name,
         )
-        try:
-            path.unlink(missing_ok=True)
-        except PermissionError as e:
-            logger.error("Не смог удалить файл {path}:\n{e}", path=path, e=e)
-            return False
-        return True
-
-    def _delete_if_oversized_or_size_zero(
-        self, new_dir: Path, path: Path, snap: FileSnapshot | None
-    ) -> None:
-
-        local_size = self.get_local_file_size(path)
-        remote_size = snap.size if snap is not None else 0
-
-        if (
-            remote_size is None
-            or remote_size == 0
-            or local_size > remote_size
-            or local_size == 0
-        ):
-            logger.warning(
-                "В директории {new_dir} размер файла {name} ({local}) равен 0\n"
-                "или больше размера на FTP ({remote}) или размер файла на FTP неизвестен\n"
-                "файл {name} будет удалён.\n",
-                new_dir=new_dir,
-                name=path.name,
-                local=local_size,
-                remote=remote_size or 0,
-            )
-            path.unlink(missing_ok=True)
 
     def _ensure_new_dir_ready(
         self,
@@ -279,33 +195,50 @@ class TransferService:
         Возвращает то же, что items_dir_to_filesnapshots().
         """
         items_dir = list(new_dir.iterdir())
-        if not items_dir:
-            return self.select_size_matched_snapshots(
-                items_dir=items_dir,
-                snapshots_by_name=snapshots_by_name,
+        if items_dir:
+            logger.info(
+                "В директории {new_dir} обнаружены компоненты системы", new_dir=new_dir
             )
-
-        logger.info(
-            "В директории {new_dir} обнаружены компоненты системы", new_dir=new_dir
-        )
-
-        action = self._prompt_new_dir_action()
-
-        if action is NewDirAction.STOP:
-            logger.error("Пользователь отказался продолжать работу")
-            raise SystemExit(1)
-
-        if action is NewDirAction.RESTART:
-            self.clean_dir(new_dir)
-            self.clean_dir(old_dir)
-            items_dir = list(new_dir.iterdir())
+            need_rescan_new_dir = self._process_nonempty_new_dir(
+                new_dir=new_dir, old_dir=old_dir
+            )
+            if need_rescan_new_dir:
+                items_dir = list(new_dir.iterdir())
 
         # CONTINUE или RESTART -> строим снапшот по текущему содержимому NEW
-        print("Продолжаем работать")
         return self.select_size_matched_snapshots(
-            items_dir=items_dir,
-            snapshots_by_name=snapshots_by_name,
+            items_dir=items_dir, snapshots_by_name=snapshots_by_name
         )
+
+    def _process_nonempty_new_dir(self, new_dir: Path, old_dir: Path) -> bool:
+        """
+        Обрабатывает ситуацию, когда NEW не пустая:
+        - STOP    -> завершает программу (SystemExit)
+        - RESTART -> чистит NEW и OLD и сообщает, что NEW надо перечитать
+        - CONTINUE-> ничего не чистит, перечитывать не нужно
+        Возвращает: нужно ли заново считать содержимое NEW (bool).
+        """
+        action = self._prompt_new_dir_action()
+
+        match action:
+            case NewDirAction.STOP:
+                logger.error("Пользователь отказался продолжать работу")
+                raise SystemExit(1)
+
+            case NewDirAction.RESTART:
+                self.clean_dir(new_dir)
+                self.clean_dir(old_dir)
+                logger.info("Пользователь начал скачивание заново")
+                print("Начинаем работать заново")
+                return True  # перечитать NEW
+
+            case NewDirAction.CONTINUE:
+                logger.info("Пользователь продолжил ранее начатое скачивание")
+                print("Продолжаем работать")
+                return False  # перечитывать не надо
+
+            case _:
+                assert_never(action)
 
     def _is_pycharm_console(self) -> bool:
         return os.environ.get("PYCHARM_HOSTED") == "1"
@@ -368,57 +301,5 @@ class TransferService:
 
         return local_size
 
-    def _copy_local_files(
-            self,
-            snapshots: list[FileSnapshot],
-            from_dir: Path,
-            to_dir: Path,
-    ) -> None:
-
-        self._help_copy_or_move(
-            callback=self._safe_copy,
-            snapshots=snapshots,
-            from_dir=from_dir,
-            to_dir=to_dir,
-        )
-
-    def _move_local_files(
-            self,
-            snapshots: list[FileSnapshot],
-            from_dir: Path,
-            to_dir: Path,
-    ) -> None:
-
-        self._assert_same_fs(from_dir, to_dir)
-
-        self._help_copy_or_move(
-            callback=self._safe_move,
-            snapshots=snapshots,
-            from_dir=from_dir,
-            to_dir=to_dir,
-        )
-
-    def _help_copy_or_move(
-            self,
-            callback: Callable[[Path, Path], None],
-            snapshots: list[FileSnapshot],
-            from_dir: Path,
-            to_dir: Path,
-    ) -> None:
-        for snapshot in snapshots:
-            from_path = Path(from_dir) / self._snapshot_name(snapshot)
-            to_path = Path(to_dir) / self._snapshot_name(snapshot)
-            try:
-                callback(from_path, to_path)
-            except (
-                    FileNotFoundError,
-                    PermissionError,
-                    OSError,
-            ) as e:
-                raise RuntimeError(
-                    f"Не смог переместить файл из {from_path} в {to_dir}\n{e}"
-                ) from e
-        return
-
     def _snapshot_name(self, snap: FileSnapshot) -> str:
-        return PurePosixPath(snap.path).name
+        return PurePosixPath(snap.name).name

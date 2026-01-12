@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Set
+from typing import Set, TypeAlias, Protocol
 from ftplib import FTP
+from pathlib import Path
 
 from SRC.SYNC_APP.CONFIG.config import AppConfig
+
+ReportItems: TypeAlias = list["ReportItem"]
 
 
 class ConnectError(Exception):
@@ -20,11 +23,7 @@ class DownloadDirError(Exception):
     pass
 
 
-class FTPListError(Exception):
-    pass
-
-
-class RepositorySnapshotError(Exception):
+class ConfigError(Exception):
     pass
 
 
@@ -39,36 +38,30 @@ class RuntimeContext:
     once_per_day        : bool
     use_stop_list       : bool
 
-
-@dataclass(frozen=True)
-class InvalidFile:
-    path                    : str
-    error                   : str
-
 @dataclass(frozen=True)
 class DiffPlan:
-    to_delete               : list[FileSnapshot]
-    to_download             : list[FileSnapshot]
-    diff_files              : list[InvalidFile]
+    to_delete           : list[FileSnapshot]
+    to_download         : list[FileSnapshot]
+    report_plan         : ReportItems
 
 
-class ModeSnapShop(Enum):
-    LITE_MODE               = auto()
-    FULL_MODE               = auto()
+class ModeSnapshot(Enum):
+    LITE_MODE           = auto()
+    FULL_MODE           = auto()
 
 class ModeDiffPlan(Enum):
-    USE_STOP_LIST           = auto()
-    NOT_USE_STOP_LIST       = auto()
+    USE_STOP_LIST       = auto()
+    NOT_USE_STOP_LIST   = auto()
 
 
 @dataclass(frozen=True)
 class FileSnapshot:
-    path                    : str
-    size                    : int | None
-    md5_hash                : str | None
+    name                : str
+    size                : int | None
+    md5_hash            : str | None
 
     def _k(self) -> str:
-        return self.path.strip()
+        return self.name.strip()
 
     def __hash__(self) -> int:
         return hash(self._k())
@@ -88,11 +81,6 @@ class ErrorNumber(Enum):
     conflict_files      = auto()
 
 
-class TransferMode(Enum):
-    delete              = auto()
-    download            = auto()
-
-
 class ExecutionChoice(Enum):
     RUN                 = auto()
     SKIP                = auto()
@@ -101,9 +89,24 @@ class ExecutionChoice(Enum):
 @dataclass(frozen=True)
 class SnapshotInput:
     context             : RuntimeContext
-    ftp                 : FTP
-    mode                : ModeSnapShop
-    only_for            : Set | None = None
+    mode                : ModeSnapshot
+    local               : Path | None = None
+    ftp                 : Ftp | None = None
+    only_for            : Set[str] | None = None
+
+
+@dataclass(frozen=True)
+class ReportItem:
+    name                : str
+    comment             : str
+
+
+@dataclass(frozen=True)
+class ValidateInput:
+    context             : RuntimeContext
+    local               : RepositorySnapshot
+    remote              : RepositorySnapshot
+    delete              : list[FileSnapshot]
 
 
 @dataclass(frozen=True)
@@ -111,28 +114,14 @@ class DiffInput:
     context             : RuntimeContext
     local               : RepositorySnapshot
     remote              : RepositorySnapshot
-    use_stop_list       : ModeDiffPlan
+    stop_list_mode      : ModeDiffPlan
 
 
 @dataclass(frozen=True)
 class TransferInput:
     context             : RuntimeContext
-    ftp                 : FTP
-    mode                : TransferMode
+    ftp                 : Ftp
     snapshots           : list[FileSnapshot]
-
-
-@dataclass(frozen=True)
-class ErrorEvent:
-    context             : RuntimeContext
-    code                : ErrorNumber
-    details             : object
-
-
-@dataclass(frozen=True)
-class VersionConflictGroup:
-    latest              : str
-    older               : list[str]
 
 
 @dataclass(frozen=True)
@@ -148,22 +137,35 @@ class FTPInput:
 
 
 @dataclass(frozen=True)
+class ReportItemInput:
+    context             : RuntimeContext
+    is_validate_commit  : bool
+    report              : ReportItems
+
+
+@dataclass(frozen=True)
 class FTPDirItem:
-    remote_full         : str
+    remote_name         : str
     size                : int | None
     md5_hash            : str | None
 
 
+# ---------- FTP adapter ----------
+class Ftp(Protocol):
+    def connect(self) -> None: ...
+    def close(self) -> None: ...
+    def download_dir(self, data: DownloadDirFtpInput) -> list[FTPDirItem]: ...
+    def download_file(
+            self, remote_item: FTPDirItem, local_name: Path, local_file_size: int
+    ) -> None: ...
+
+
 @dataclass(frozen=True)
 class DownloadDirFtpInput:
-    with_md5            : ModeSnapShop          = ModeSnapShop.LITE_MODE
+    hash_mode           : ModeSnapshot          = ModeSnapshot.LITE_MODE
     only_for            : Set[str] | None       = None
 
 # fmt: on
-    def __post_init__(self):
-        if self.only_for and not self.with_md5:
-            raise ValueError("only_for допустим только при with_md5=True")
-
     def __repr__(self) -> str:
         if self.only_for is None:
             only_for_repr = "None"
@@ -172,7 +174,7 @@ class DownloadDirFtpInput:
 
         return (
             f"{self.__class__.__name__}("
-            f"with_md5={self.with_md5}, "
-            f"only_for={only_for_repr}"
+            f"hash_mode={self.hash_mode}, "
+            f"only_for={only_for_repr} файла"
             f")"
         )

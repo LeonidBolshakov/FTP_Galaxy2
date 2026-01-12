@@ -30,7 +30,7 @@ class FileLoggingConfig(BaseModel):
     rotation: str = "1 MB"
     format: str = (
         "{time:YYYY-MM-DD HH:mm:ss} | {level:<8} | "
-        "{file.path}{function}:{line} - {message}"
+        "{file.name}{function}:{line} - {message}"
     )
     retention: str | None = None
     compression: str | None = None

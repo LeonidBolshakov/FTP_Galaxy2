@@ -1,4 +1,4 @@
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 import hashlib
 
 from SRC.SYNC_APP.APP.dto import (
@@ -48,16 +48,7 @@ class SnapshotService:
             DownloadDirFtpInput(hash_mode=data.mode, only_for=data.only_for)
         )
 
-        files = {
-            PurePosixPath(item.remote_name).name: FileSnapshot(
-                name=item.remote_name,
-                size=item.size,
-                md5_hash=item.md5_hash,
-            )
-            for item in items
-        }
-
-        return RepositorySnapshot(files=files)
+        return RepositorySnapshot(files=items.files)
 
     def _md5sum(self, path: Path, chunk_size: int = 1024 * 1024) -> str:
         h = hashlib.md5()

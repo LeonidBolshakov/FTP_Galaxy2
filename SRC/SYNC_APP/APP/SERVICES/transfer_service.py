@@ -8,7 +8,6 @@ from loguru import logger
 
 from SRC.SYNC_APP.APP.dto import (
     TransferInput,
-    FTPDirItem,
     FileSnapshot,
     LocalFileAccessError,
     DownloadFileError,
@@ -124,13 +123,12 @@ class TransferService:
     ) -> None:
         remote_name = snapshot.name
         local_name = Path(self._snapshot_name(snapshot))
-        local_name = new_dir / local_name
+        local_full_path = new_dir / local_name
 
         try:
             ftp.download_file(
                 remote_item=self._ftp_item_from_snapshot(snapshot),
-                local_name=local_name,
-                local_file_size=self.get_local_file_size(local_name),
+                local_full_path=local_full_path,
             )
         except DownloadFileError as e:
             try:
@@ -145,9 +143,9 @@ class TransferService:
             )
 
     # --- 6) Построение FTPDirItem из снапшота
-    def _ftp_item_from_snapshot(self, snapshot: FileSnapshot) -> FTPDirItem:
-        return FTPDirItem(
-            remote_name=snapshot.name,
+    def _ftp_item_from_snapshot(self, snapshot: FileSnapshot) -> FileSnapshot:
+        return FileSnapshot(
+            name=snapshot.name,
             size=snapshot.size,
             md5_hash=snapshot.md5_hash,
         )

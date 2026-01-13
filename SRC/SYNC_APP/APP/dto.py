@@ -143,21 +143,13 @@ class ReportItemInput:
     report              : ReportItems
 
 
-@dataclass(frozen=True)
-class FTPDirItem:
-    remote_name         : str
-    size                : int | None
-    md5_hash            : str | None
-
-
 # ---------- FTP adapter ----------
 class Ftp(Protocol):
     def connect(self) -> None: ...
     def close(self) -> None: ...
-    def download_dir(self, data: DownloadDirFtpInput) -> list[FTPDirItem]: ...
+    def download_dir(self, data: DownloadDirFtpInput) -> RepositorySnapshot: ...
     def download_file(
-            self, remote_item: FTPDirItem, local_name: Path, local_file_size: int
-    ) -> None: ...
+            self, remote_item: FileSnapshot, local_full_path: Path) -> None: ...
 
 
 @dataclass(frozen=True)

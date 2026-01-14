@@ -48,7 +48,7 @@ class TransferService:
         local_dir, new_dir, old_dir = self._prepare_official_dirs(data)
         snapshots_by_name = self._index_snapshots_by_name(snapshots)
 
-        valid_new_snapshots = self._ensure_new_dir_ready(
+        valid_new_snapshots = self._build_new_dir_snapshots(
             new_dir=new_dir,
             old_dir=old_dir,
             snapshots_by_name=snapshots_by_name,
@@ -180,7 +180,7 @@ class TransferService:
             path=path.name,
         )
 
-    def _ensure_new_dir_ready(
+    def _build_new_dir_snapshots(
         self,
         *,
         new_dir: Path,
@@ -190,7 +190,7 @@ class TransferService:
         """
         Если NEW пуста — просто строим локальный снапшот.
         Если NEW не пуста — спрашиваем пользователя: продолжить / начать заново / остановить.
-        Возвращает то же, что items_dir_to_filesnapshots().
+        Возвращает то же, что select_size_matched_snapshots().
         """
         items_dir = list(new_dir.iterdir())
         if items_dir:
@@ -204,7 +204,7 @@ class TransferService:
                 items_dir = list(new_dir.iterdir())
 
         # CONTINUE или RESTART -> строим снапшот по текущему содержимому NEW
-        return self.select_size_matched_snapshots(
+        return self._get_verified_snapshots_for_items_dir(
             items_dir=items_dir, snapshots_by_name=snapshots_by_name
         )
 
@@ -268,7 +268,7 @@ class TransferService:
                 return action
             print("Неверный выбор. Ожидается П/Н/С.")
 
-    def select_size_matched_snapshots(
+    def _get_verified_snapshots_for_items_dir(
         self, items_dir: list[Path], snapshots_by_name: dict[str, FileSnapshot]
     ) -> list[FileSnapshot]:
         file_snapshots: list[FileSnapshot] = []

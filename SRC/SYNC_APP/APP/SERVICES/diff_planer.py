@@ -1,7 +1,6 @@
 from loguru import logger
 import os
 import posixpath
-from pathlib import PurePosixPath
 from typing import Mapping
 
 from SRC.SYNC_APP.APP.dto import (
@@ -24,8 +23,6 @@ class DiffPlanner:
 
     Важно:
         Сравнение производится по *имени файла* (basename), без учёта каталогов.
-        Для remote-части ключи нормализуются как Path(remote_path).name.
-        Это означает, что два разных remote-пути с одинаковым basename считаются конфликтом.
     """
 
     def run(self, data: DiffInput) -> DiffPlan:
@@ -33,12 +30,11 @@ class DiffPlanner:
 
         Алгоритм:
             1) Берёт локальные файлы как есть: `data.local.files` (dict[name -> FileSnapshot]).
-            2) Преобразует удалённые файлы к словарю `basename -> FileSnapshot`.
-            3) По множествам ключей вычисляет:
+            2) По множествам ключей вычисляет:
                - to_delete   = local - remote
                - to_download = remote - local
                - common      = local ∩ remote
-            4) Для common сравнивает пары FileSnapshot по size и md5_hash и формирует список InvalidFile.
+            3) Для common сравнивает пары FileSnapshot по size и формирует список ReportItem.
 
         Args:
             data: DiffInput, содержащий два снимка: local и remote.
@@ -47,123 +43,110 @@ class DiffPlanner:
             DiffPlan:
                 - to_delete: отсортированный список FileSnapshot, которые есть локально, но отсутствуют на сервере;
                 - to_download: отсортированный список FileSnapshot, которые есть на сервере, но отсутствуют локально;
-                - report_items: список расхождений для файлов, присутствующих в обоих снимках.
+                - report_items: список несовпадающих файлов, присутствующих в обоих снимках.
         """
+
+        # local_files / remote_files — снимки файлов: {имя_файла -> FileSnapshot}
         local_files: dict[str, FileSnapshot] = data.local.files
-        remote_files: dict[str, FileSnapshot] = self._remote_files_by_basename(
-            data.remote.files
+        remote_files: dict[str, FileSnapshot] = data.remote.files
+
+        # local_names / remote_names — только имена файлов (ключи словарей)
+        local_names: set[str] = set(local_files)
+        remote_names: set[str] = set(remote_files)
+
+        # common_names — файлы, которые есть и локально, и на сервере
+        common_names = local_names & remote_names
+
+        # delete_names — “лишние локальные”: есть локально, но нет на сервере
+        delete_names = local_names - remote_names
+
+        # raw_download_names — “нужно скачать”: есть на сервере, но нет локально
+        raw_download_names = remote_names - local_names
+
+        # download_names — итог к скачиванию после add_list/stop_list
+        download_names = self._apply_add_stop_lists(
+            data=data,
+            raw_download_names=raw_download_names,
+            remote_names=remote_names,
         )
 
-        local_names: set[str] = self._names(local_files)
-        remote_names: set[str] = self._names(remote_files)
+        # to_delete / to_download — сами FileSnapshot по рассчитанным именам
+        to_delete = self._collect_snapshots(local_files, delete_names)
+        to_download = self._collect_snapshots(remote_files, download_names)
 
-        common_names: set[str] = self._common_names(local_names, remote_names)
-        delete_names: set[str] = self._delete_names(local_names, remote_names)
-
-        raw_download_names: set[str] = self._download_names(local_names, remote_names)
-        download_names: set[str] = self._apply_stop_lists(data, raw_download_names)
-
-        to_delete: list[FileSnapshot] = self._collect_snapshots(
-            local_files, delete_names
-        )
-        to_download: list[FileSnapshot] = self._collect_snapshots(
-            remote_files, download_names
-        )
-
-        report_items: ReportItems = self._diff_common(
+        # report_items — несоответствия среди common (пока только size)
+        report_items = self._get_mismatched_files(
             common_names, local_files, remote_files
         )
 
         return self._build_plan(to_delete, to_download, report_items)
 
-    def _remote_files_by_basename(
-            self,
-            remote_files: Mapping[str, FileSnapshot],
-    ) -> dict[str, FileSnapshot]:
-        """Нормализация remote: ключ -> basename"""
-
-        return {PurePosixPath(p).name: snap for p, snap in remote_files.items()}
-
-    def _names(self, files: Mapping[str, FileSnapshot]) -> set[str]:
-        """Получение множества имён (ключей словаря)"""
-        return set(files)
-
-    # -------
-    # --- Операции над множествами имён
-    # -------
-    def _common_names(self, local: set[str], remote: set[str]) -> set[str]:
-        return local & remote
-
-    def _delete_names(self, local: set[str], remote: set[str]) -> set[str]:
-        return local - remote
-
-    def _download_names(self, local: set[str], remote: set[str]) -> set[str]:
-        return remote - local
-
-    # -------
-
-    def _apply_stop_lists(self, data: DiffInput, download: set[str]) -> set[str]:
-        """Применение stop/add списков (если включено)"""
+    def _apply_add_stop_lists(
+        self,
+        data: DiffInput,
+        raw_download_names: set[str],
+        remote_names: set[str],
+    ) -> set[str]:
+        """Применение add/stop списков (если включено)"""
+        if not raw_download_names:
+            return set()
 
         # работаем с копией, чтобы не мутировать входной set снаружи
-        result = set(download)
+        result = set(raw_download_names)
+        add_list = set(data.context.app.add_list or ())
 
-        result |= self.apply_add_set(data, result)
+        result |= add_list & remote_names
 
         if data.context.use_stop_list == ModeDiffPlan.USE_STOP_LIST:
-            result -= self.apply_stop_set(data, result)
-
-        if len(result) <= len(data.context.app.add_list):
-            result.clear()
+            result -= self._get_files_excluded_by_stop_list(data, result)
 
         return result
 
     def _collect_snapshots(
-            self,
-            files: Mapping[str, FileSnapshot],
-            names: set[str],
+        self,
+        files: Mapping[str, FileSnapshot],
+        names: set[str],
     ) -> list[FileSnapshot]:
         """Сбор FileSnapshot по именам файлов"""
 
-        return [files[name] for name in names]
+        collected = []
+        for name in names:
+            item = files.get(name)
+            if item is None:
+                continue
+            collected.append(item)
 
-    def _diff_common(
-            self,
-            common_names: set[str],
-            local_files: Mapping[str, FileSnapshot],
-            remote_files: Mapping[str, FileSnapshot],
+        return collected
+
+    def _get_mismatched_files(
+        self,
+        common_names: set[str],
+        local_file_snapshots: Mapping[str, FileSnapshot],
+        remote_file_snapshots: Mapping[str, FileSnapshot],
     ) -> ReportItems:
-        """Сравнение common и формирование списка InvalidFile"""
+        """Сравнение common и формирование списка ReportItem"""
 
         report_items = ReportItems()
 
         for name in common_names:
-            local = local_files[name]
-            remote = remote_files[name]
+            local = local_file_snapshots[name]
+            remote = remote_file_snapshots[name]
 
             if local.size != remote.size:
                 report_items.append(
                     ReportItem(
                         name,
-                        f"Размеры: local={local.size}, remote={remote.size}",
-                    )
-                )
-
-            if local.md5_hash != remote.md5_hash:
-                report_items.append(
-                    ReportItem(
-                        name,
-                        f"Хэш файла: local={local.md5_hash}, remote={remote.md5_hash}",
+                        f"Размеры: local={local.size}, remote={remote.size} не равны",
                     )
                 )
 
         return report_items
 
     def _build_plan(
-            self,
-            to_delete: list[FileSnapshot],
-            to_download: list[FileSnapshot],
-            report_items: ReportItems,
+        self,
+        to_delete: list[FileSnapshot],
+        to_download: list[FileSnapshot],
+        report_items: ReportItems,
     ) -> DiffPlan:
         """Финальная сборка и сортировка"""
 
@@ -181,22 +164,21 @@ class DiffPlanner:
 
         return f"{stem}{suffix}"
 
-    def apply_stop_set(self, data: DiffInput, downloads: set[str]) -> set[str]:
-        stop_set: set[str] = {x.strip() for x in data.context.app.stop_list}
+    def _get_files_excluded_by_stop_list(
+        self, data: DiffInput, downloads: set[str]
+    ) -> set[str]:
+        """Вернёт подмножество downloads, которое надо исключить по stop_list."""
 
-        to_remove = set()
+        stop_list_set: set[str] = {x.strip() for x in data.context.app.stop_list}
 
-        for item in downloads:
-            if self._snapshot_name_to_stop_key(item) in stop_set:
-                to_remove.add(item)
+        excluded = set()
+
+        for item in sorted(downloads):
+            if self._snapshot_name_to_stop_key(item) in stop_list_set:
+                excluded.add(item)
                 logger.warning(
                     "Файл {file} копироваться не будет <-- STOP LIST",
                     file=item,
                 )
 
-        return to_remove
-
-    def apply_add_set(self, data: DiffInput, dpwnloads: set[str]) -> set[str]:
-        to_add: set[str] = {x for x in data.context.app.add_list}
-
-        return to_add
+        return excluded

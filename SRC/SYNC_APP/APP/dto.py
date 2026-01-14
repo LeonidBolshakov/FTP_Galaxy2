@@ -90,7 +90,6 @@ class ExecutionChoice(Enum):
 class SnapshotInput:
     context             : RuntimeContext
     mode                : ModeSnapshot
-    local               : Path | None = None
     ftp                 : Ftp | None = None
     only_for            : Set[str] | None = None
 

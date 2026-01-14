@@ -56,23 +56,18 @@ class SyncController:
         general_report: ReportItems = []
 
         local_before, remote_before = self._get_lite_snapshots()
-
         pre_plan = self._plan_diff(local=local_before, remote=remote_before)
 
         general_report.extend(pre_plan.report_plan)
 
         self._download_if_needed(plan=pre_plan)
-
         local_after, remote_after = self._get_full_snapshots_only_for(plan=pre_plan)
-
         is_validate_commit, report_validate = self._validate_and_commit(
             local=local_after, remote=remote_after, delete=pre_plan.to_delete
         )
         general_report.extend(report_validate)
-
         conflicts_report: ReportItems = self._validate_repository(local=local_after)
         general_report.extend(conflicts_report)
-
         self._report(is_validate_commit=is_validate_commit, report=general_report)
 
     def _get_lite_snapshots(self) -> tuple[RepositorySnapshot, RepositorySnapshot]:
@@ -80,7 +75,6 @@ class SyncController:
             SnapshotInput(
                 context=self.runtime_context,
                 mode=ModeSnapshot.LITE_MODE,
-                local=self.runtime_context.app.local_dir,
             )
         )
         remote_before = self.snapshot_service.remote(
@@ -133,7 +127,6 @@ class SyncController:
             SnapshotInput(
                 context=self.runtime_context,
                 mode=ModeSnapshot.FULL_MODE,
-                local=self.runtime_context.app.new_dir,
                 only_for=only_for,
             )
         )

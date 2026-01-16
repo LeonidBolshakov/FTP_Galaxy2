@@ -47,7 +47,7 @@ TEMP_EXCEPTIONS = (
 class MLSDFacts(TypedDict, total=False):
     """Типизированное описание facts, возвращаемых MLSD/MLST.
 
-    В ftplib mlsd() возвращает пары (name, facts), где facts — dict[str, str].
+    В ftplib mlsd() возвращает пары (local_file_path, facts), где facts — dict[str, str].
     Здесь описаны наиболее используемые поля; набор зависит от FTP-сервера.
     """
 
@@ -311,7 +311,7 @@ class Ftp:
         ftp_root = self.ftp_input.context.app.ftp_root
         self._safe_cwd_ftp(ftp_root)
 
-        # 2) Считываем содержимое директории через MLSD (возвращает name + facts)
+        # 2) Считываем содержимое директории через MLSD (возвращает local_file_path + facts)
         raw_items = self._safe_mlsd()
 
         # 3) Формируем список элементов директории
@@ -334,7 +334,7 @@ class Ftp:
 
     def _retrbinary_with_resume(
             self,
-            remote_full_path: str,
+            file_name: str,
             f: BinaryIO,
             callback: Callable[[bytes], None]
     ) -> str:
@@ -344,7 +344,7 @@ class Ftp:
         rest = f.tell()
 
         return self.ftp.retrbinary(
-            f"RETR {remote_full_path}",
+            f"RETR {file_name}",
             callback,
             rest=rest or None,  # 0 -> None
             blocksize=self.blocksize,
@@ -352,7 +352,7 @@ class Ftp:
 
     def _download_attempt(
         self,
-            remote_full_path: str,
+            file_name: str,
             local_full_path: Path,
         *,
         offset: int,
@@ -365,15 +365,15 @@ class Ftp:
 
         with open(local_full_path, mode) as f:
             writer = _RetrWriterWithProgress(
-                f=f, label=remote_full_path, downloaded=offset
+                f=f, label=file_name, downloaded=offset
             )
 
             try:
                 self._ftp_call(
-                    lambda: self._retrbinary_with_resume(remote_full_path, f, writer),
-                    what=f"загрузку файла {remote_full_path!r}",
+                    lambda: self._retrbinary_with_resume(file_name, f, writer),
+                    what=f"загрузку файла {file_name!r}",
                     err_cls=DownloadFileError,
-                    temp_log=f"Сбой/таймаут при загрузке файла {remote_full_path!r}",
+                    temp_log=f"Сбой/таймаут при загрузке файла {file_name!r}",
                 )
             finally:
                 writer.finish()
@@ -398,7 +398,7 @@ class Ftp:
         """Скачивает/докачивает файл и поднимает DownloadFileError при любой ошибке докачки."""
         try:
             self._download_attempt(
-                remote_full_path=remote_full_name,
+                file_name=remote_full_name,
                 local_full_path=local_full_name,
                 offset=offset,
             )
@@ -410,7 +410,7 @@ class Ftp:
     def _try_resume_after_failure(
             self,
             *,
-            item: FileSnapshot,
+            snapshot: FileSnapshot,
             local_path: Path,
             cause: Exception,
     ) -> None:
@@ -420,75 +420,75 @@ class Ftp:
           - DownloadFileError: если докачка невозможна или докачка тоже не удалась.
           - пробрасывает исходное исключение, если докачка не имеет смысла (offset<=0).
         """
-        if item.size is None:
+        if snapshot.size is None:
             raise DownloadFileError(
                 "Догрузка невозможна: FTP сервер не указал размер файла."
             ) from cause
 
-        offset = self._calc_offset(local_path, item.size)
+        offset = self._calc_offset(local_path, snapshot.size)
         if offset <= 0:
             # Нечего докачивать: повторная попытка будет идентична первой.
             raise cause  # проброс исходного исключения (из except-блока, где вызван этот метод)
 
         logger.info(
             "Неудача при загрузке, пробуем докачку: {!r} (offset={})",
-            item.name,
+            snapshot.name,
             offset,
         )
 
         self._download_attempt_as_download_error(
-            remote_full_name=item.name,
+            remote_full_name=snapshot.name,
             local_full_name=local_path,
             offset=offset,
         )
 
     def _download_file_with_resume(
-            self, remote_item: FileSnapshot, local_full_path: Path, offset: int = 0
+            self, snapshot: FileSnapshot, local_full_path: Path, offset: int = 0
     ) -> None:
         """Скачиваем файл с возможной докачкой"""
         # 1) пробуем скачать с нуля
         try:
             self._download_attempt(
-                remote_full_path=remote_item.name,
+                file_name=snapshot.name,
                 local_full_path=local_full_path,
                 offset=offset,
             )
 
         except DownloadFileError as e:
             self._try_resume_after_failure(
-                item=remote_item,
+                snapshot=snapshot,
                 local_path=local_full_path,
                 cause=e,
             )
 
     def download_file(
-            self, remote_item: FileSnapshot, local_full_path: Path) -> None:
+            self, snapshot: FileSnapshot, local_full_path: Path) -> None:
         """Скачивает один файл и проверяет итоговый размер."""
 
         offset = self._local_size(local_full_path)
 
         # 1) Скачиваем файл
         self._download_file_with_resume(
-            remote_item=remote_item, local_full_path=local_full_path, offset=offset,
+            snapshot=snapshot, local_full_path=local_full_path, offset=offset,
         )
 
         local_file_size = self._local_size(local_full_path)
 
         # 2) если размер совпал — готово
-        if remote_item.size is None:
+        if snapshot.size is None:
             raise DownloadFileError(
-                f"FTP сервер не указал размер файла {remote_item.name}\n"
+                f"FTP сервер не указал размер файла {snapshot.name}\n"
                 f"Контроль по размеру проводится не будет."
             )
 
-        if local_file_size == remote_item.size:
+        if local_file_size == snapshot.size:
             return
 
         # 3) иначе — фиксируем неудачу
         raise DownloadFileError(
             f"Размер не совпал после скачивания.\n"
-            f"Имя файла - {remote_item.name}\n"
-            f"Ожидаемый размер expected={remote_item.size}, реальный размер local={local_file_size}"
+            f"Имя файла - {snapshot.name}\n"
+            f"Ожидаемый размер expected={snapshot.size}, реальный размер local={local_file_size}"
         )
 
     def _get_size(

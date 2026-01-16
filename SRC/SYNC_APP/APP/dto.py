@@ -120,7 +120,7 @@ class DiffInput:
 class TransferInput:
     context             : RuntimeContext
     ftp                 : Ftp
-    snapshots           : list[FileSnapshot]
+    schnapsots_for_loading           : list[FileSnapshot]
 
 
 @dataclass(frozen=True)
@@ -148,7 +148,7 @@ class Ftp(Protocol):
     def close(self) -> None: ...
     def download_dir(self, data: DownloadDirFtpInput) -> RepositorySnapshot: ...
     def download_file(
-            self, remote_item: FileSnapshot, local_full_path: Path) -> None: ...
+            self, snapshot: FileSnapshot, local_full_path: Path) -> None: ...
 
 
 @dataclass(frozen=True)

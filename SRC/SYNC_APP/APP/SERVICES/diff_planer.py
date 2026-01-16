@@ -29,7 +29,7 @@ class DiffPlanner:
         """Сравнивает локальные и удалённые файлы и возвращает DiffPlan.
 
         Алгоритм:
-            1) Берёт локальные файлы как есть: `data.local.files` (dict[name -> FileSnapshot]).
+            1) Берёт локальные файлы как есть: `data.local.files` (dict[local_file_path -> FileSnapshot]).
             2) По множествам ключей вычисляет:
                - to_delete   = local - remote
                - to_download = remote - local

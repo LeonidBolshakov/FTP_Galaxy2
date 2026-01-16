@@ -114,7 +114,7 @@ class SyncController:
                 TransferInput(
                     context=self.runtime_context,
                     ftp=self.ftp,
-                    snapshots=plan.to_download,
+                    schnapsots_for_loading=plan.to_download,
                 )
             )
 

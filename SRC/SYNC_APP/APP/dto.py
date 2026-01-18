@@ -49,9 +49,16 @@ class ModeSnapshot(Enum):
     LITE_MODE           = auto()
     FULL_MODE           = auto()
 
+
 class ModeDiffPlan(Enum):
     USE_STOP_LIST       = auto()
     NOT_USE_STOP_LIST   = auto()
+
+
+class ValidateCommitResult(Enum):
+    SUCCESS             = auto()
+    FAILURE             = auto()
+    UNKNOWN             = auto()
 
 
 @dataclass(frozen=True)
@@ -72,74 +79,84 @@ class FileSnapshot:
 
 @dataclass(frozen=True)
 class RepositorySnapshot:
-    files               : dict[str, FileSnapshot]
+    files                       : dict[str, FileSnapshot]
 
 
 class ErrorNumber(Enum):
-    diff_pre_files      = auto()
-    diff_download_files = auto()
-    conflict_files      = auto()
+    diff_pre_files              = auto()
+    diff_download_files         = auto()
+    conflict_files              = auto()
 
 
 class ExecutionChoice(Enum):
-    RUN                 = auto()
-    SKIP                = auto()
+    RUN                         = auto()
+    SKIP                        = auto()
 
 
 @dataclass(frozen=True)
 class SnapshotInput:
-    context             : RuntimeContext
-    mode                : ModeSnapshot
-    ftp                 : Ftp | None = None
-    only_for            : Set[str] | None = None
+    context                     : RuntimeContext
+    mode                        : ModeSnapshot
+    local_dir                   : Path | None =None
+    ftp                         : Ftp | None = None
+    only_for                    : Set[str] | None = None
 
 
 @dataclass(frozen=True)
 class ReportItem:
-    name                : str
-    comment             : str
+    name                        : str
+    comment                     : str
 
 
 @dataclass(frozen=True)
 class ValidateInput:
-    context             : RuntimeContext
-    local               : RepositorySnapshot
-    remote              : RepositorySnapshot
-    delete              : list[FileSnapshot]
+    context                     : RuntimeContext
+    plan                        : DiffPlan
+    new_dir                     : Path
+    local_snap                  : RepositorySnapshot
+    remote_snap                 : RepositorySnapshot
+
+
+@dataclass(frozen=True)
+class SaveInput:
+    context                     : RuntimeContext
+    delete                      : list[FileSnapshot]
 
 
 @dataclass(frozen=True)
 class DiffInput:
-    context             : RuntimeContext
-    local               : RepositorySnapshot
-    remote              : RepositorySnapshot
-    stop_list_mode      : ModeDiffPlan
+    context                     : RuntimeContext
+    local_snap                  : RepositorySnapshot
+    remote_snap                 : RepositorySnapshot
+    stop_list_mode              : ModeDiffPlan
 
 
 @dataclass(frozen=True)
 class TransferInput:
-    context             : RuntimeContext
-    ftp                 : Ftp
-    schnapsots_for_loading           : list[FileSnapshot]
+    context                     : RuntimeContext
+    ftp                         : Ftp
+    schnapsots_for_loading      : list[FileSnapshot]
 
 
 @dataclass(frozen=True)
 class ValidateRepositoryInput:
-    context             : RuntimeContext
-    snapshot            : RepositorySnapshot
+    context                     : RuntimeContext
+    snapshot                    : RepositorySnapshot
 
 
 @dataclass(frozen=True)
 class FTPInput:
-    context             : RuntimeContext
-    ftp                 : FTP
+    context                     : RuntimeContext
+    ftp                         : FTP
 
 
 @dataclass(frozen=True)
 class ReportItemInput:
-    context             : RuntimeContext
-    is_validate_commit  : bool
-    report              : ReportItems
+    context                     : RuntimeContext
+    is_validate_commit          : bool
+    report                      : ReportItems
+
+# fmt: on
 
 
 # ---------- FTP adapter ----------
@@ -147,16 +164,15 @@ class Ftp(Protocol):
     def connect(self) -> None: ...
     def close(self) -> None: ...
     def download_dir(self, data: DownloadDirFtpInput) -> RepositorySnapshot: ...
-    def download_file(
-            self, snapshot: FileSnapshot, local_full_path: Path) -> None: ...
+
+    def download_file(self, snapshot: FileSnapshot, local_full_path: Path) -> None: ...
 
 
 @dataclass(frozen=True)
 class DownloadDirFtpInput:
-    hash_mode           : ModeSnapshot          = ModeSnapshot.LITE_MODE
-    only_for            : Set[str] | None       = None
+    hash_mode: ModeSnapshot = ModeSnapshot.LITE_MODE
+    only_for: Set[str] | None = None
 
-# fmt: on
     def __repr__(self) -> str:
         if self.only_for is None:
             only_for_repr = "None"

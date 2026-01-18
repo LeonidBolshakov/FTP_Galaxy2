@@ -16,16 +16,17 @@ CHUNK_SIZE = 1024 * 1024
 
 class SnapshotService:
     def local(self, data: SnapshotInput) -> RepositorySnapshot:
-        local_dir = data.context.app.local_dir
-        local_path = Path(local_dir)
+        if data.local_dir is None:
+            raise RuntimeError("SnapshotService.local Параметр local_dir обязателен")
+        local_path = Path(data.local_dir)
 
         try:
             local_dir_iter = local_path.iterdir()
         except OSError as e:
             raise ConfigError(
-                f"{self._where('local')}: Не удалось открыть local_dir={local_dir!r}.\n"
+                f"{self._where('local_snap')}: Не удалось открыть local_dir={local_path!r}.\n"
                 f"Проверьте параметр local_dir и доступность директории "
-                f"(её могли удалить/переместить или нет прав).\n"
+                f"(её могли удалить/переместить или на неё нет прав).\n"
                 f"{e}"
             ) from e
 
@@ -40,19 +41,13 @@ class SnapshotService:
                 st = file.stat()
             except OSError as e:
                 raise DownloadDirError(
-                    f"{self._where('local')}: Ошибка при чтении атрибутов файла {file!s} "
-                    f"(local_dir={local_dir!r}).\n{e}"
+                    f"{self._where('local_snap')}: Ошибка при чтении атрибутов файла {file!s} "
+                    f"(local_dir={local_path!r}).\n{e}"
                 ) from e
 
-            md5_hash = None
-            if data.mode == ModeSnapshot.FULL_MODE:
-                try:
-                    md5_hash = self._md5sum(file)
-                except OSError as e:
-                    raise DownloadDirError(
-                        f"{self._where('local')}: Ошибка при чтении/хешировании локального файла {file!s} "
-                        f"(local_dir={local_dir!r}).\n{e}"
-                    ) from e
+            md5_hash = (
+                self._md5_hash(file) if data.mode == ModeSnapshot.FULL_MODE else None
+            )
 
             files[file.name] = FileSnapshot(
                 name=file.name,
@@ -64,7 +59,7 @@ class SnapshotService:
     def remote(self, data: SnapshotInput) -> RepositorySnapshot:
         if data.ftp is None:
             raise RuntimeError(
-                f"{self._where('remote')}: должен быть передан параметр ftp"
+                f"{self._where('remote_snap')}: должен быть передан параметр ftp"
             )
 
         items = data.ftp.download_dir(
@@ -80,9 +75,16 @@ class SnapshotService:
     def _where(self, method: str) -> str:
         return f"{type(self).__name__}.{method}"
 
-    def _md5sum(self, path: Path) -> str:
+    def _md5_hash(self, path: Path) -> str:
         h = hashlib.md5()
-        with path.open("rb") as f:
-            for chunk in iter(lambda: f.read(CHUNK_SIZE), b""):
-                h.update(chunk)
+        try:
+            with path.open("rb") as f:
+                for chunk in iter(lambda: f.read(CHUNK_SIZE), b""):
+                    h.update(chunk)
+        except OSError as e:
+            raise DownloadDirError(
+                f"{self._where('local_snap')}: Ошибка при чтении/хешировании локального файла {path!s}\n"
+                f"{e}"
+            ) from e
+
         return h.hexdigest()

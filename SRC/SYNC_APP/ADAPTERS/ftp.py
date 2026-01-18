@@ -466,6 +466,8 @@ class Ftp:
         """Скачивает один файл и проверяет итоговый размер."""
 
         offset = self._local_size(local_full_path)
+        if offset == snapshot.size:
+            return
 
         # 1) Скачиваем файл
         self._download_file_with_resume(
@@ -486,7 +488,7 @@ class Ftp:
 
         # 3) иначе — фиксируем неудачу
         raise DownloadFileError(
-            f"Размер не совпал после скачивания.\n"
+            f"Размер скаченного файла не совпал с размерос файла на FTP.\n"
             f"Имя файла - {snapshot.name}\n"
             f"Ожидаемый размер expected={snapshot.size}, реальный размер local={local_file_size}"
         )

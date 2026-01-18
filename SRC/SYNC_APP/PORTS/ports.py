@@ -15,6 +15,7 @@ from SRC.SYNC_APP.APP.dto import (
     RepositorySnapshot,
     ReportItems,
     ReportItemInput,
+    SaveInput,
 )
 
 
@@ -42,10 +43,12 @@ class TransferService(Protocol):
 
 
 # ---------- Сверка скаченных файлов с эталоном и, при необходимости, перенос файлов
-class ValidateAndSaveService(Protocol):
-    def validate(self, data: ValidateInput) -> tuple[bool, ReportItems]: ...
+class ValidateService(Protocol):
+    def run(self, data: ValidateInput) -> ReportItems: ...
 
-    def commit_keep_new_old_files(self, data: RuntimeContext) -> None: ...
+
+class SaveService(Protocol):
+    def commit_keep_new_old_files(self, data: SaveInput) -> None: ...
 
 
 # ---------- Вывод сводного отчёта

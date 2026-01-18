@@ -20,12 +20,13 @@ from SRC.SYNC_APP.APP.controller import SyncController
 from SRC.SYNC_APP.APP.SERVICES.snapshot_service import SnapshotService
 from SRC.SYNC_APP.APP.SERVICES.diff_planer import DiffPlanner
 from SRC.SYNC_APP.APP.SERVICES.transfer_service import TransferService
+from SRC.SYNC_APP.APP.SERVICES.validate_service import ValidateService
 from SRC.SYNC_APP.INFRA.executiongate import ExecutionGate
 from SRC.SYNC_APP.INFRA.setup_loguru import setup_loguru
 from SRC.SYNC_APP.INFRA.stubs import (
-    EmptyRepositoryValidator,
-    ValidateAndSaveService,
+    RepositoryValidator,
     ReportService,
+    SaveService,
 )
 
 
@@ -55,8 +56,9 @@ def main() -> int:
             diff_planner=DiffPlanner(),
             transfer_service=TransferService(),
             execution_gate=ExecutionGate(),
-            repository_validator=EmptyRepositoryValidator(),
-            validate_and_save_service=ValidateAndSaveService(),
+            repository_validator=RepositoryValidator(),
+            validate_service=ValidateService(),
+            save_service=SaveService(),
             report_service=ReportService(),
         )
 

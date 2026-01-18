@@ -1,3 +1,4 @@
+from os import unlink
 from pathlib import Path
 from enum import Enum, auto
 import os
@@ -119,6 +120,7 @@ class TransferService:
             self._make_sure_file_known(
                 local_file_path=local_file_path, snapshots_by_name=snapshots_by_name
             )
+            self._unlink_zero_file(local_file_path=local_file_path)
 
     @staticmethod
     def _make_sure_is_file(local_file_path: Path) -> None:
@@ -138,6 +140,14 @@ class TransferService:
             logger.warning(
                 "Обнаружен не запланированный к загрузке или уже загруженный файл {local_file_path}",
                 local_file_path=local_file_path,
+            )
+
+    def _unlink_zero_file(self, local_file_path: Path) -> None:
+        if self.get_local_file_size(local_file_path) == 0:
+            self._fs_call(
+                local_file_path,
+                "Удаление пустого файла",
+                lambda: unlink(local_file_path),
             )
 
     def _ensure_new_and_old_dirs_are_ready(

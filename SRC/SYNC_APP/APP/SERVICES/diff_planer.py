@@ -29,15 +29,15 @@ class DiffPlanner:
         """Сравнивает локальные и удалённые файлы и возвращает DiffPlan.
 
         Алгоритм:
-            1) Берёт локальные файлы как есть: `data.local.files` (dict[local_file_path -> FileSnapshot]).
+            1) Берёт локальные файлы как есть: `data.local_snap.files` (dict[local_file_path -> FileSnapshot]).
             2) По множествам ключей вычисляет:
-               - to_delete   = local - remote
-               - to_download = remote - local
-               - common      = local ∩ remote
+               - to_delete   = local_snap - remote_snap
+               - to_download = remote_snap - local_snap
+               - common      = local_snap ∩ remote_snap
             3) Для common сравнивает пары FileSnapshot по size и формирует список ReportItem.
 
         Args:
-            data: DiffInput, содержащий два снимка: local и remote.
+            data: DiffInput, содержащий два снимка: local_snap и remote_snap.
 
         Returns:
             DiffPlan:
@@ -46,13 +46,13 @@ class DiffPlanner:
                 - report_items: список несовпадающих файлов, присутствующих в обоих снимках.
         """
 
-        # local_files / remote_files — снимки файлов: {имя_файла -> FileSnapshot}
-        local_files: dict[str, FileSnapshot] = data.local.files
-        remote_files: dict[str, FileSnapshot] = data.remote.files
+        # local_snaps_files / remote_snaps_files — снимки файлов: {имя_файла -> FileSnapshot}
+        local_snaps_files: dict[str, FileSnapshot] = data.local_snap.files
+        remote_snaps_files: dict[str, FileSnapshot] = data.remote_snap.files
 
         # local_names / remote_names — только имена файлов (ключи словарей)
-        local_names: set[str] = set(local_files)
-        remote_names: set[str] = set(remote_files)
+        local_names: set[str] = set(local_snaps_files)
+        remote_names: set[str] = set(remote_snaps_files)
 
         # common_names — файлы, которые есть и локально, и на сервере
         common_names = local_names & remote_names
@@ -71,12 +71,12 @@ class DiffPlanner:
         )
 
         # to_delete / to_download — сами FileSnapshot по рассчитанным именам
-        to_delete = self._collect_snapshots(local_files, delete_names)
-        to_download = self._collect_snapshots(remote_files, download_names)
+        to_delete = self._collect_snapshots(local_snaps_files, delete_names)
+        to_download = self._collect_snapshots(remote_snaps_files, download_names)
 
         # report_items — несоответствия среди common (пока только size)
         report_items = self._get_mismatched_files(
-            common_names, local_files, remote_files
+            common_names, local_snaps_files, remote_snaps_files
         )
 
         return self._build_plan(to_delete, to_download, report_items)
@@ -136,7 +136,7 @@ class DiffPlanner:
                 report_items.append(
                     ReportItem(
                         name,
-                        f"Размеры: local={local.size}, remote={remote.size} не равны",
+                        f"Размеры: local_snap={local.size}, remote_snap={remote.size} не равны",
                     )
                 )
 

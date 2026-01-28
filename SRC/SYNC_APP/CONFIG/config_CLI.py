@@ -3,6 +3,7 @@ from pathlib import Path
 import argparse
 
 from SRC.SYNC_APP.APP.dto import ModeDiffPlan
+from SRC.SYNC_APP.CONFIG.default_config import get_default_config_path
 
 _MODE_MAP = {
     "stop-list": ModeDiffPlan.USE_STOP_LIST,
@@ -21,7 +22,7 @@ def mode_type(s: str) -> ModeDiffPlan:
 
 
 def parse_args() -> argparse.Namespace:
-    default_config = Path(__file__).parent / "config.yaml"
+    default_config = get_default_config_path()
     p = argparse.ArgumentParser(prog="Sync_FTP_Galaxy")
     p.add_argument(
         "--config",

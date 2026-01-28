@@ -1,37 +1,56 @@
-from os import unlink
+"""
+transfer_service.py
+
+Сервис загрузки набора файлов (по снапшотам) в «официальную» директорию NEW.
+
+Основной сценарий:
+1) Убедиться, что директории local/NEW/OLD существуют.
+2) Если NEW не пустая — спросить пользователя (продолжить / начать заново / стоп).
+3) Привести NEW в пригодное состояние (удалить нулевые файлы, проверить что в NEW нет папок).
+4) Скачать файлы из списка снапшотов в NEW.
+5) Вернуть (успех, отчёт).
+
+Отчёт (ReportItems) используется для фиксации фатальных ситуаций (например, пользователь отменил работу,
+или в NEW обнаружен не файл).
+"""
+
 from pathlib import Path
 from enum import Enum, auto
-import os
-import sys
-from typing import assert_never, Callable, TypeVar
+from typing import assert_never, Callable
 
 from loguru import logger
 
 from SRC.SYNC_APP.APP.dto import (
     TransferInput,
     FileSnapshot,
-    LocalFileAccessError,
     DownloadFileError,
     Ftp,
+    ReportItems,
+    ReportItem,
+    StatusReport,
 )
+from SRC.SYNC_APP.INFRA.utils import prompt_action, clean_dir, fs_call, safe_mkdir
 
 
 # fmt: off
 class NewDirAction(Enum):
+    """Варианты действий, если директория NEW не пустая."""
     CONTINUE                    = auto()    # Докачиваем в текущую NEW
     RESTART                     = auto()    # Начинаем заново: чистим NEW и OLD
     STOP                        = auto()    # Выходим из программы
 # fmt: on
 
 
+# Меню выбора действия при обнаружении файлов в NEW.
 MENU = (
-    "Директория NEW содержит компоненты системы.\n"
-    "[П] Продолжаем (докачка)\n"
-    "[Н] Начинаем заново (очистим NEW и OLD)\n"
-    "[С] Стоп - прекращаем работу\n"
+    "Директория NEW содержит компоненты системы.",
+    "[П] Продолжаем (докачка)",
+    "[Н] Начинаем заново (очистим NEW и OLD)",
+    "[С] Стоп — прекращаем работу",
 )
 
 # fmt: off
+# Раскладка горячих клавиш с учётом RU/EN + популярных вариантов (p/g, n/y, s/c).
 MAPPING = {
     "п": NewDirAction.CONTINUE, "p": NewDirAction.CONTINUE, "g": NewDirAction.CONTINUE,
     "н": NewDirAction.RESTART,  "n": NewDirAction.RESTART,  "y": NewDirAction.RESTART,
@@ -39,50 +58,142 @@ MAPPING = {
 }
 # fmt: on
 
+# Тип «функции выбора» действия для NEW: позволяет заменить UI на автологику/тестовый стаб.
+NewDirSelector = Callable[[Path], NewDirAction]
+
+
+def interface_new_dir_selector(_: Path) -> NewDirAction:
+    """
+    UI-реализация выбора действия для NEW.
+
+    Возвращает выбранное пользователем действие через prompt_action().
+
+    Args:
+        _: путь к NEW (в текущей реализации не используется).
+
+    Returns:
+        NewDirAction: действие пользователя.
+    """
+    return prompt_action(mapping=MAPPING, menu=MENU)
+
 
 class TransferService:
-    def run(self, data: TransferInput) -> None:
+    """
+    Сервис, который скачивает набор файлов по снапшотам в директорию NEW.
+
+    Особенности:
+    - При наличии файлов в NEW требует решения пользователя (continue/restart/stop).
+    - Удаляет нулевые файлы в NEW (чтобы принудить повторную загрузку).
+    - Фиксирует фатальные ситуации в self.report и возвращает его вызывающему коду.
+
+    Возврат метода run():
+        (ok, report)
+        ok == True  -> отчёт пуст (ошибок/фаталов не зафиксировано)
+        ok == False -> в отчёте есть записи (как минимум FATAL)
+    """
+
+    def __init__(self, new_dir_selector: NewDirSelector | None = None) -> None:
+        """
+        Args:
+            new_dir_selector: функция выбора действия при непустой NEW.
+                Если не передана — используется интерактивная interface_new_dir_selector.
+
+        Side effects:
+            Создаёт контейнер отчёта (ReportItems), в который методы добавляют ReportItem.
+        """
+        self.new_dir_selector = new_dir_selector or interface_new_dir_selector
+        self.report = ReportItems()
+
+    def run(self, data: TransferInput) -> tuple[bool, ReportItems]:
+        """
+        Выполнить перенос/скачивание файлов в NEW.
+
+        Steps:
+        1) Подготовить директории local/NEW/OLD.
+        2) Проиндексировать снапшоты по имени (для потенциальных проверок/санации).
+        3) Если NEW не пустая — спросить действие пользователя (continue/restart/stop).
+        4) Очистить/проверить содержимое NEW (удалить нулевые файлы, проверить что это файлы).
+        5) Скачать указанные снапшоты в NEW.
+
+        Args:
+            data: TransferInput с ftp-клиентом, списком снапшотов для загрузки и контекстом путей.
+
+        Returns:
+            tuple[bool, ReportItems]: (успех, отчёт).
+        """
+
+        self.report = ReportItems()
         ftp = data.ftp
-        snapshots_for_loading = data.schnapsots_for_loading
+        snapshots_for_loading = data.snapshots_for_loading
 
         local_dir, new_dir, old_dir = self._prepare_official_dirs(data)
         schnapsots_for_loading_by_name = self._index_snapshots_by_name(
             snapshots_for_loading
         )
 
-        self._ensure_new_and_old_dirs_are_ready(new_dir=new_dir, old_dir=old_dir)
-        self._sanitize_new_dir(
-            new_dir=new_dir, snapshots_by_name=schnapsots_for_loading_by_name
-        )
+        # Если NEW содержит файлы — требуем решение пользователя (продолжать/перезапуск/стоп).
+        good = self._ensure_new_and_old_dirs_are_ready(new_dir=new_dir, old_dir=old_dir)
+        if not good:
+            return good, self.report
 
+        # Лёгкая “санация” NEW: в текущей версии — только проверка на “это файл” + удаление нулевых.
+        self._sanitize_new_dir(new_dir=new_dir)
+
+        # Скачиваем снапшоты в NEW.
         self._download_files_from_snapshots(
             ftp=ftp, snapshots_to_download=snapshots_for_loading, new_dir=new_dir
         )
+        return False if self.report else True, self.report
 
     def _prepare_official_dirs(self, data: TransferInput) -> tuple[Path, Path, Path]:
-        """Подготовка директорий NEW/OLD"""
+        """
+        Подготовить «официальные» директории local/NEW/OLD.
+
+        Создаёт директории при необходимости.
+
+        Args:
+            data: TransferInput с путями в data.context.app.*
+
+        Returns:
+            (local_dir, new_dir, old_dir)
+        """
 
         local_dir = data.context.app.local_dir
         new_dir = data.context.app.new_dir_path
         old_dir = data.context.app.old_dir_path
-        self.safe_mkdir(local_dir)
-        self.safe_mkdir(new_dir)
-        self.safe_mkdir(old_dir)
+        safe_mkdir(local_dir)
+        safe_mkdir(new_dir)
+        safe_mkdir(old_dir)
         return local_dir, new_dir, old_dir
 
     def _index_snapshots_by_name(
             self, snapshots: list[FileSnapshot]
     ) -> dict[str, FileSnapshot]:
-        """Индексация снапшотов по имени файла"""
+        """
+        Проиндексировать снапшоты по имени файла.
+
+        Удобно, если нужно быстро проверять “ожидается ли файл” по имени.
+
+        Args:
+            snapshots: список FileSnapshot.
+
+        Returns:
+            dict[name -> FileSnapshot]
+        """
 
         return {snap.name: snap for snap in snapshots}
 
     def _download_files_from_snapshots(
             self, ftp: Ftp, snapshots_to_download: list[FileSnapshot], new_dir: Path
     ) -> None:
-        """Загрузка файлов"""
-        print("Загрузка файлов")
+        """
+        Скачать список файлов по снапшотам.
 
+        Args:
+            ftp: FTP-обёртка/клиент.
+            snapshots_to_download: список FileSnapshot, которые нужно скачать.
+            new_dir: директория назначения (NEW).
+        """
         for snapshot in snapshots_to_download:
             self._download_file_from_snapshot(
                 ftp=ftp, snapshot=snapshot, new_dir=new_dir
@@ -91,7 +202,18 @@ class TransferService:
     def _download_file_from_snapshot(
             self, ftp: Ftp, snapshot: FileSnapshot, new_dir: Path
     ) -> None:
-        """Скачивание одного файла"""
+        """
+        Скачать один файл, описанный снапшотом.
+
+        В случае DownloadFileError:
+        - запись в отчёт не добавляется (только лог),
+          предполагается, что “полный контроль”/валидация будет в другом слое.
+
+        Args:
+            ftp: FTP-обёртка/клиент.
+            snapshot: снапшот файла (имя/размер/хэш и т.п. — зависит от FileSnapshot).
+            new_dir: директория назначения (NEW).
+        """
         file_name = snapshot.name
         local_full_path = new_dir / file_name
 
@@ -101,53 +223,70 @@ class TransferService:
                 local_full_path=local_full_path,
             )
         except DownloadFileError as e:
-            logger.error(
+            logger.info(
                 "Файл {file} не загружен в директорию {dir}\n{e}",
                 file=file_name,
                 dir=new_dir,
                 e=e,
             )
 
-    @staticmethod
-    def safe_mkdir(dir_path: Path) -> None:
-        Path(dir_path).mkdir(parents=True, exist_ok=True)
+            self.report.append(
+                ReportItem(
+                    name=file_name,
+                    status=StatusReport.ERROR,
+                    comment=f"Файл {local_full_path} не загружен на локальный диск\n{e}",
+                )
+            )
 
-    def _sanitize_new_dir(
-            self, new_dir: Path, snapshots_by_name: dict[str, FileSnapshot]
-    ) -> None:
+    def _sanitize_new_dir(self, new_dir: Path) -> None:
+        """
+        Привести NEW в “аккуратное” состояние перед докачкой.
+
+        Текущие действия:
+        — убедиться, что каждый элемент в NEW — файл (иначе FATAL в отчёт),
+        — удалить файлы нулевого размера (чтобы они были скачаны заново).
+
+        Args:
+            new_dir: директория NEW.
+        """
         for local_file_path in new_dir.iterdir():
             self._make_sure_is_file(local_file_path=local_file_path)
-            self._make_sure_file_known(
-                local_file_path=local_file_path, snapshots_by_name=snapshots_by_name
-            )
             self._unlink_zero_file(local_file_path=local_file_path)
 
-    @staticmethod
-    def _make_sure_is_file(local_file_path: Path) -> None:
+    def _make_sure_is_file(self, local_file_path: Path) -> None:
+        """
+        Проверить, что элемент в NEW — именно файл.
+
+        Если это не файл (например, каталог) — фиксируем FATAL в отчёте.
+
+        Args:
+            local_file_path: путь к элементу из NEW.
+        """
         if local_file_path.is_file():
             return
 
-        logger.error(
-            "Найден не-файл: {local_file_path}. Программа прекращает работу.",
-            local_file_path=local_file_path,
-        )
-        raise SystemExit(1)
-
-    def _make_sure_file_known(
-            self, local_file_path: Path, snapshots_by_name: dict[str, FileSnapshot]
-    ) -> None:
-        if local_file_path.name not in snapshots_by_name:
-            logger.warning(
-                "Обнаружен не запланированный к загрузке или уже загруженный файл {local_file_path}",
-                local_file_path=local_file_path,
+        self.report.append(
+            ReportItem(
+                name=local_file_path.name,
+                status=StatusReport.FATAL,
+                comment=f"{local_file_path.name} не является файлом или не существует в директории NEW",
             )
+        )
 
     def _unlink_zero_file(self, local_file_path: Path) -> None:
+        """
+        Удалить файл нулевого размера.
+
+        Нулевой размер трактуется как “битая/недокачанная” сущность, которую лучше скачать заново.
+
+        Args:
+            local_file_path: путь к файлу в NEW.
+        """
         if self.get_local_file_size(local_file_path) == 0:
-            self._fs_call(
+            fs_call(
                 local_file_path,
                 "Удаление пустого файла",
-                lambda: unlink(local_file_path),
+                lambda: local_file_path.unlink(),
             )
 
     def _ensure_new_and_old_dirs_are_ready(
@@ -155,97 +294,77 @@ class TransferService:
         *,
         new_dir: Path,
         old_dir: Path,
-    ) -> None:
+    ) -> bool:
+        """
+        Убедиться, что NEW/OLD готовы к работе.
 
-        items_dir = list(new_dir.iterdir())
+        Если NEW пустая — всё ок.
+        Если NEW не пустая — спрашиваем действие пользователя:
+        - STOP: фиксируем FATAL и прекращаем (return False)
+        - RESTART: очищаем NEW и OLD, продолжаем (return True)
+        - CONTINUE: продолжаем докачку в текущую NEW (return True)
+
+        Args:
+            new_dir: директория NEW.
+            old_dir: директория OLD (используется при RESTART для очистки).
+
+        Returns:
+            bool: True — можно продолжать; False — работу нужно прервать.
+        """
+
+        try:
+            items_dir = list(new_dir.iterdir())
+        except OSError as e:
+            raise RuntimeError(f"Ошибка при чтении директории {new_dir}") from e
+
         if not items_dir:
-            return
+            return True
 
         logger.info(
             "В директории {new_dir} обнаружены компоненты системы", new_dir=new_dir
         )
 
-        action = self._prompt_new_dir_action()
+        action = self.new_dir_selector(new_dir)
         match action:
             case NewDirAction.STOP:
+                self.report.append(
+                    ReportItem(
+                        name="",
+                        status=StatusReport.FATAL,
+                        comment="Пользователь отказался продолжать работу",
+                    )
+                )
                 logger.error("Пользователь отказался продолжать работу")
-                raise SystemExit(1)
+                return False
 
             case NewDirAction.RESTART:
                 logger.info("Пользователь решил начать скачивание заново")
-                print("Начинаем работать заново")
-                self.clean_dir(new_dir)
-                self.clean_dir(old_dir)
+                clean_dir(new_dir)
+                clean_dir(old_dir)
 
             case NewDirAction.CONTINUE:
                 logger.info("Пользователь решил продолжить ранее начатое скачивание")
-                print("Продолжаем работать")
 
             case _:
                 assert_never(action)
 
-    def _is_pycharm_console(self) -> bool:
-        return os.environ.get("PYCHARM_HOSTED") == "1"
-
-    def _read_char_windows(self, prompt: str) -> str:
-        # noinspection PyCompatibility
-        import msvcrt
-
-        print(prompt, end="", flush=True)
-        ch = msvcrt.getwch()
-        print(ch)  # эхо
-        return ch
-
-    def _prompt_new_dir_action(self) -> NewDirAction:
-        use_msvcrt = (
-            sys.platform == "win32"
-            and sys.stdin.isatty()
-            and not self._is_pycharm_console()
-        )
-
-        read = self._read_char_windows if use_msvcrt else input
-
-        print(MENU, end="")
-        while True:
-            raw = read("> ").strip()
-            key = raw[:1].lower() if raw else ""
-            action = MAPPING.get(key)
-            if action is not None:
-                return action
-            print("Неверный выбор. Ожидается П/Н/С.")
-
-    def clean_dir(self, dir_path: Path) -> None:
-        try:
-            dir_path_iter = dir_path.iterdir()
-        except FileNotFoundError:
-            return
-
-        for p in dir_path_iter:
-            if p.is_file():
-                try:
-                    self._fs_call(p, "удаление", lambda: p.unlink(missing_ok=True))
-                except FileNotFoundError:
-                    continue
-            else:
-                raise LocalFileAccessError(
-                    f"{p} каталог или другой объект. Переместите или удалите его и другие объекты"
-                )
-
-    T = TypeVar("T")
-
-    def _fs_call(self, path: Path, action: str, fn: Callable[[], T]) -> T:
-        try:
-            return fn()
-        except PermissionError as e:
-            raise LocalFileAccessError(f"Нет доступа к{path}") from e
-        except OSError as e:
-            raise LocalFileAccessError(
-                f"Ошибка файловой системы при {action} для {path}:\n{e}"
-            ) from e
+        return True
 
     def get_local_file_size(self, path: Path) -> int:
+        """
+        Безопасно получить размер локального файла.
+
+        Обёртка над stat().st_size через fs_call().
+        Если файл отсутствует — возвращает 0.
+
+        Args:
+            path: путь к файлу.
+
+        Returns:
+            int: размер в байтах или 0, если файл не найден.
+        """
         try:
-            local_size = self._fs_call(
+            local_size = fs_call(
                 path, "Получение размера файла", lambda: path.stat().st_size
             )
         except FileNotFoundError:

@@ -21,6 +21,8 @@ from dataclasses import dataclass
 
 from loguru import logger
 
+from SRC.SYNC_APP.INFRA.utils import fs_call
+
 from SRC.SYNC_APP.APP.dto import (
     FTPInput,
     FileSnapshot,
@@ -43,14 +45,15 @@ TEMP_EXCEPTIONS = (
 )  # Исключения, при которых имеет смысл повторить попытку обращения к FTP
 
 
-# fmt: off
 class MLSDFacts(TypedDict, total=False):
     """Типизированное описание facts, возвращаемых MLSD/MLST.
 
-    В ftplib mlsd() возвращает пары (local_file_path, facts), где facts — dict[str, str].
-    Здесь описаны наиболее используемые поля; набор зависит от FTP-сервера.
+    В `ftplib.FTP.mlsd()` возвращает пары ``(name, facts)``, где ``facts`` — это
+    ``dict[str, str]`` с метаданными, предоставленными сервером. Ниже описаны
+    наиболее используемые поля; фактический набор ключей зависит от реализации FTP.
     """
 
+    # fmt: off
     type                        : str
     size                        : str
     modify                      : str
@@ -59,14 +62,27 @@ class MLSDFacts(TypedDict, total=False):
 
 @dataclass
 class _RetrWriterWithProgress:
-    f                           : BinaryIO
-    label                       : str
-    downloaded                  : int
-    update_every_sec            : float = 0.5
-    _last_ts                    : float = 0.0
+    """Callable-обёртка для записи чанков `retrbinary()` с выводом прогресса.
+
+    Используется как callback для `FTP.retrbinary()`: пишет полученные байты в файл,
+    увеличивает счётчик скачанного и периодически печатает прогресс в stdout.
+
+    Атрибуты dataclass:
+        f: Открытый бинарный файл для записи.
+        label: Метка (обычно имя файла) для печати прогресса.
+        downloaded: Сколько байт уже скачано (важно для докачки).
+        update_every_sec: Минимальный интервал обновления прогресса.
+    """
+
+    f: BinaryIO
+    label: str
+    downloaded: int
+    update_every_sec: float = 0.5
+    _last_ts: float = 0.0
     # fmt: on
 
     def __call__(self, chunk: bytes) -> None:
+        """Записывает chunk в файл и (периодически) печатает прогресс скачивания."""
         self.f.write(chunk)
         self.downloaded += len(chunk)
 
@@ -76,6 +92,7 @@ class _RetrWriterWithProgress:
             self._last_ts = now
 
     def finish(self) -> None:
+        """Печатает финальное сообщение о количестве скачанных байт."""
         print(f"\r<-- {self.label!r}: {self.downloaded} байт", flush=True)
 
 
@@ -123,8 +140,17 @@ class Ftp:
     ) -> Exception | None:
         """Логирует временную ошибку и пытается переподключиться.
 
-        Returns:
-            Исключение переподключения (если переподключиться не удалось), иначе None.
+        Parameters
+        ----------
+        temp_log : str
+            Контекстное сообщение для логов.
+        e : BaseException
+            Исходная ошибка временного сбоя.
+
+        Returns
+        -------
+        Exception | None
+            Ошибка переподключения (если переподключение не удалось), иначе ``None``.
         """
 
         logger.info("{}:\n{}. Повтор...", temp_log, e)
@@ -151,32 +177,38 @@ class Ftp:
         err_cls: Type[E],
         temp_log: str,
     ) -> T:
-        """Единая обёртка для FTP-вызовов: ретраи + классификация ошибок.
+        """Единая обёртка для FTP-вызовов: ретраи и классификация ошибок.
 
         Делает несколько попыток выполнить `action()`. Временные сетевые/серверные сбои
-        (timeout, OSError, error_temp) считаются повторяемыми: пишется warning,
+        (timeout, OSError, error_temp, ...) считаются повторяемыми: пишется лог,
         выполняется попытка переподключения и делается пауза перед следующей попыткой.
 
-        Постоянные/протокольные ошибки (error_perm, error_reply, error_proto) не ретраятся
-        и сразу переводятся в доменное исключение `err_cls`.
+        Постоянные/протокольные ошибки (error_perm, error_reply, error_proto) не
+        повторяются и сразу переводятся в доменное исключение `err_cls`.
 
-        Args:
-            action: Функция без аргументов, выполняющая один FTP-вызов (одну операцию).
-                Должна вернуть результат типа `T` или выбросить исключение ftplib/сети.
-            what: Человекочитаемое описание операции (используется в текстах ошибок),
-                например: "cwd в /incoming", "MLSD /incoming", "RETR file.bin".
-            err_cls: Класс доменного исключения, которое будет выброшено при фатальной
-                ошибке или после исчерпания повторов (например, `DownloadDirError`,
-                `DownloadFileError`, `ConnectError`).
-            temp_log: Префикс/контекст для логов при временной ошибке (info),
-                например: "Временный сбой при MLSD", "Timeout при RETR".
+        Parameters
+        ----------
+        action : Callable[[], T]
+            Функция без аргументов, выполняющая одну FTP-операцию и возвращающая `T`.
+        what : str
+            Человекочитаемое описание операции (для сообщений об ошибках), например:
+            ``"cwd в /incoming"``, ``"MLSD /incoming"``, ``"RETR file.bin"``.
+        err_cls : type[E]
+            Класс доменного исключения, которое поднимается при фатальной ошибке или
+            после исчерпания повторов.
+        temp_log : str
+            Контекст/префикс для логов при временной ошибке.
 
-        Returns:
-            Результат выполнения `action()` (тип `T`).
+        Returns
+        -------
+        T
+            Результат выполнения `action()`.
 
-        Raises:
-            err_cls: Если произошла постоянная/протокольная ошибка, либо если
-                ретраи исчерпаны, либо если произошла неизвестная ошибка.
+        Raises
+        ------
+        err_cls
+            При постоянной/протокольной ошибке, при исчерпании повторов или при
+            неизвестной ошибке.
         """
         repeat = self.ftp_input.context.app.ftp_repeat
         last_error: BaseException | None = None
@@ -282,6 +314,25 @@ class Ftp:
         ftp_root: str,
         data: DownloadDirFtpInput,
     ) -> RepositorySnapshot:
+        """Преобразует результат MLSD в `RepositorySnapshot`.
+
+        Фильтрует только файлы (``facts["type"] == "file"``), учитывает ограничение
+        `only_for` и, при необходимости, запрашивает хэш (XMD5).
+
+        Parameters
+        ----------
+        raw_items : list[tuple[str, MLSDFacts]]
+            Элементы, возвращённые MLSD.
+        ftp_root : str
+            Путь каталога на FTP, относительно которого строится полный путь к файлу.
+        data : DownloadDirFtpInput
+            Параметры построения снимка (фильтрация и режим хэша).
+
+        Returns
+        -------
+        RepositorySnapshot
+            Снимок файлов каталога.
+        """
         items = RepositorySnapshot(files={})
 
         try:
@@ -295,23 +346,26 @@ class Ftp:
                 size = self._get_size(facts)
                 remote_full_name = posixpath.join(ftp_root, name)
                 md5_hash = self._get_hmd5(remote_full_name, data.hash_mode)
-                items.files[name] = FileSnapshot(name=name, size=size, md5_hash=md5_hash)
+                items.files[name] = FileSnapshot(
+                    name=name, size=size, md5_hash=md5_hash
+                )
         except all_errors as e:
             raise ConnectError(f"ошибка при чтении элементов каталога\n{e}") from e
 
         return items
 
     def download_dir(self, data: DownloadDirFtpInput) -> RepositorySnapshot:
-        """Считывает каталог FTP и возвращает список FTPDirItem.
+        """Считывает корневой каталог FTP и возвращает снимок репозитория.
 
-        Использует MLSD; при необходимости, дополнительно запрашивает XMD5 для выбранных файлов.
+        Использует MLSD; при необходимости дополнительно запрашивает XMD5 для выбранных
+        файлов (если включён соответствующий режим хэширования).
         """
 
         # 1) Переходим в корневую директорию через безопасный вызов с ретраями
         ftp_root = self.ftp_input.context.app.ftp_root
         self._safe_cwd_ftp(ftp_root)
 
-        # 2) Считываем содержимое директории через MLSD (возвращает local_file_path + facts)
+        # 2) Считываем содержимое директории через MLSD (возвращает name + facts)
         raw_items = self._safe_mlsd()
 
         # 3) Формируем список элементов директории
@@ -323,8 +377,9 @@ class Ftp:
     def _calc_offset(self, local_path: Path, expected_size: int) -> int:
         """Определяет смещение для докачки (REST) на основе локального файла.
 
-        Если resume=False или файла нет — начинаем с нуля.
-        Если локальный файл больше ожидаемого — докачка бессмысленна, начинаем заново.
+        Если локального файла нет — начинаем с нуля.
+        Если локальный файл больше ожидаемого — докачка бессмысленна, возвращаем 0
+        (перезапись с начала).
         """
         if not local_path.exists():
             return 0
@@ -333,11 +388,13 @@ class Ftp:
         return 0 if offset > expected_size else offset
 
     def _retrbinary_with_resume(
-            self,
-            file_name: str,
-            f: BinaryIO,
-            callback: Callable[[bytes], None]
+            self, file_name: str, f: BinaryIO, callback: Callable[[bytes], None]
     ) -> str:
+        """Выполняет `RETR` с поддержкой докачки через параметр `rest`.
+
+        Смещение (`rest`) берётся из текущей позиции файлового объекта `f` (размера уже
+        записанной части). Это позволяет FTP-серверу продолжить передачу с нужного места.
+        """
         # ВАЖНО: вызывается на каждый ретрай -> rest пересчитывается каждый раз
         f.flush()
         f.seek(0, os.SEEK_END)  # на всякий случай в конец
@@ -364,9 +421,7 @@ class Ftp:
         mode: Literal["ab", "wb"] = "ab" if offset else "wb"
 
         with open(local_full_path, mode) as f:
-            writer = _RetrWriterWithProgress(
-                f=f, label=file_name, downloaded=offset
-            )
+            writer = _RetrWriterWithProgress(f=f, label=file_name, downloaded=offset)
 
             try:
                 self._ftp_call(
@@ -414,11 +469,26 @@ class Ftp:
             local_path: Path,
             cause: Exception,
     ) -> None:
-        """Если возможно, пытается докачать файл после неудачной загрузки.
+        """Пытается выполнить докачку файла после неудачной загрузки.
 
-        Выбрасывает:
-          - DownloadFileError: если докачка невозможна или докачка тоже не удалась.
-          - пробрасывает исходное исключение, если докачка не имеет смысла (offset<=0).
+        Если FTP-сервер сообщает размер файла, вычисляется offset по локальному файлу и
+        выполняется повторная попытка с REST.
+
+        Parameters
+        ----------
+        snapshot : FileSnapshot
+            Снимок удалённого файла (имя и ожидаемый размер).
+        local_path : Path
+            Путь к локальному файлу, который может содержать частично скачанные данные.
+        cause : Exception
+            Исходная ошибка загрузки.
+
+        Raises
+        ------
+        DownloadFileError
+            Если докачка невозможна (неизвестен размер) или докачка тоже не удалась.
+        Exception
+            Пробрасывается `cause`, если докачка не имеет смысла (offset <= 0).
         """
         if snapshot.size is None:
             raise DownloadFileError(
@@ -446,7 +516,6 @@ class Ftp:
             self, snapshot: FileSnapshot, local_full_path: Path, offset: int = 0
     ) -> None:
         """Скачиваем файл с возможной докачкой"""
-        # 1) пробуем скачать с нуля
         try:
             self._download_attempt(
                 file_name=snapshot.name,
@@ -461,28 +530,34 @@ class Ftp:
                 cause=e,
             )
 
-    def download_file(
-            self, snapshot: FileSnapshot, local_full_path: Path) -> None:
+    def download_file(self, snapshot: FileSnapshot, local_full_path: Path) -> None:
         """Скачивает один файл и проверяет итоговый размер."""
+        if snapshot.size is None:
+            raise DownloadFileError(
+                f"{snapshot.name}\n" f"Размер не указан сервером — файл пропущен."
+            )
 
         offset = self._local_size(local_full_path)
         if offset == snapshot.size:
             return
 
+        if offset > self._safe_size(snapshot.size):
+            fs_call(
+                local_full_path,
+                "удаление",
+                lambda: local_full_path.unlink(missing_ok=True),
+            )
+            offset = 0
+
         # 1) Скачиваем файл
         self._download_file_with_resume(
-            snapshot=snapshot, local_full_path=local_full_path, offset=offset,
+            snapshot=snapshot,
+            local_full_path=local_full_path,
+            offset=offset,
         )
 
-        local_file_size = self._local_size(local_full_path)
-
         # 2) если размер совпал — готово
-        if snapshot.size is None:
-            raise DownloadFileError(
-                f"FTP сервер не указал размер файла {snapshot.name}\n"
-                f"Контроль по размеру проводится не будет."
-            )
-
+        local_file_size = self._local_size(local_full_path)
         if local_file_size == snapshot.size:
             return
 
@@ -559,6 +634,7 @@ class Ftp:
             raise
 
     def close(self) -> None:
+        """Корректно завершает FTP-сессию (QUIT) и закрывает соединение при необходимости."""
         try:
             self.ftp.quit()
         except Exception:
@@ -566,3 +642,7 @@ class Ftp:
                 self.ftp.close()
             except Exception:
                 pass
+
+    def _safe_size(self, size: int | None) -> int:
+        """Возвращает `size` или 0, если размер неизвестен (None)."""
+        return size if size is not None else 0

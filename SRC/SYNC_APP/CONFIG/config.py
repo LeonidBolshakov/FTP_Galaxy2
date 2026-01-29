@@ -1,3 +1,12 @@
+"""
+Конфигурация приложения и загрузка настроек из YAML.
+
+Содержит:
+- Pydantic-модели для настроек логирования (консоль/файл).
+- Основную модель настроек приложения (AppConfig) на базе BaseSettings.
+- Функцию load_config() для чтения YAML и валидации конфигурации.
+"""
+
 from pathlib import Path
 from typing import Literal, cast, Self
 
@@ -9,7 +18,6 @@ from pydantic import (
     PositiveFloat,
     Field,
 )
-
 from pydantic_settings import BaseSettings, SettingsConfigDict
 import yaml
 
@@ -20,11 +28,31 @@ import yaml
 
 
 class ConsoleLoggingConfig(BaseModel):
+    """
+    Настройки логирования в консоль (loguru).
+
+    Attributes:
+        level: Уровень логирования (например, "INFO", "DEBUG").
+        format: Формат сообщения для loguru (разметка/плейсхолдеры loguru).
+    """
+
     level: str = "INFO"
     format: str = "<green>{time:HH:mm:ss}</green> | <level>{level}</level> | {message}"
 
 
 class FileLoggingConfig(BaseModel):
+    """
+    Настройки логирования в файл (loguru).
+
+    Attributes:
+        level: Уровень логирования для файла.
+        path: Путь к файлу лога (относительный или абсолютный).
+        rotation: Правило ротации (например, "1 MB", "1 day" и т.п. по правилам loguru).
+        format: Формат записи в файл.
+        retention: Политика хранения старых логов (опционально).
+        compression: Сжатие архивов логов (опционально).
+    """
+
     level: str = "DEBUG"
     path: str = "../sync.log"
     rotation: str = "1 MB"
@@ -37,6 +65,14 @@ class FileLoggingConfig(BaseModel):
 
 
 class LoggingConfig(BaseModel):
+    """
+    Группа настроек логирования.
+
+    Attributes:
+        console: Настройки консольного логирования.
+        file: Настройки файлового логирования.
+    """
+
     console: ConsoleLoggingConfig = ConsoleLoggingConfig()
     file: FileLoggingConfig = FileLoggingConfig()
 
@@ -50,7 +86,11 @@ class AppConfig(BaseSettings):
     """
     Конфигурация приложения.
 
-    Загружается при старте и используется как неизменяемый источник настроек.
+    Загружается при старте и используется как источник настроек.
+
+    Примечание:
+        new_dir и old_dir могут не задаваться в YAML — в этом случае они вычисляются
+        на основе local_dir (см валидатор _derive_dirs()).
     """
 
     # fmt: off
@@ -74,7 +114,6 @@ class AppConfig(BaseSettings):
 
     # Поведение
     verify_mode                     : Literal["size", "md5_hash"]    = "md5_hash"
-    conflict_policy                 : Literal["FAIL", "WARN"]        = "FAIL"
 
     # Служебные файлы
     date_file                       : Path                          = Path("date_file")
@@ -85,7 +124,20 @@ class AppConfig(BaseSettings):
 
     @model_validator(mode="after")
     def _derive_dirs(self) -> Self:
-        # если new_dir/target не заданы в YAML — считаем от file_full_path
+        """
+        Довычисляет производные директории, если они не заданы.
+
+        Логика:
+            - если new_dir не задан, используем local_dir / "NEW"
+            - если old_dir не задан, используем local_dir / "OLD"
+
+        Возвращает:
+            Тот же экземпляр модели (Self) после возможных дополнений.
+
+        Важно:
+            Этот валидатор запускается после основной валидации модели.
+        """
+        # если new_dir/old_dir не заданы в YAML — считаем от local_dir
         if self.new_dir is None:
             self.new_dir = self.local_dir / "NEW"
         if self.old_dir is None:
@@ -94,13 +146,26 @@ class AppConfig(BaseSettings):
 
     @property
     def new_dir_path(self) -> Path:
+        """
+        Гарантированно возвращает путь new_dir как Path.
+
+        Предполагается, что к моменту обращения _derive_dirs() уже установил new_dir,
+        если он не был задан явно.
+        """
         return cast(Path, self.new_dir)
 
     @property
     def old_dir_path(self) -> Path:
+        """
+        Гарантированно возвращает путь old_dir как Path.
+
+        Предполагается, что к моменту обращения _derive_dirs() уже установил old_dir,
+        если он не был задан явно.
+        """
         return cast(Path, self.old_dir)
 
     model_config = SettingsConfigDict(
+        # Запрещаем неизвестные ключи в YAML, чтобы не “проглатывать” опечатки.
         extra="forbid",
     )
 
@@ -111,14 +176,31 @@ class AppConfig(BaseSettings):
 
 
 class ConfigLoadError(RuntimeError):
-    """Ошибка загрузки конфигурации."""
+    """
+    Ошибка загрузки/разбора/валидации конфигурации.
+
+    Используется как единый тип исключения для внешнего слоя приложения.
+    """
 
     pass
 
 
 def load_config(path: str | Path) -> AppConfig:
     """
-    Загружает конфигурацию из YAML-файла.
+    Загружает конфигурацию из YAML-файла и валидирует её через AppConfig.
+
+    Args:
+        path: Путь к YAML-файлу конфигурации (str или Path).
+
+    Returns:
+        Валидированный экземпляр AppConfig.
+
+    Raises:
+        ConfigLoadError:
+            - если файл не найден;
+            - если файл нельзя прочитать (ошибка ОС/доступа);
+            - если YAML некорректен (ошибка парсинга/структуры);
+            - если данные не проходят валидацию Pydantic (ValidationError).
     """
     cfg_path = Path(path)
 
@@ -131,11 +213,14 @@ def load_config(path: str | Path) -> AppConfig:
         raise ConfigLoadError(f"Неудачное чтение config файла: {cfg_path}\n{e}") from e
 
     try:
+        # safe_load возвращает python-структуру (dict/list/str/None...). Пустой файл -> None.
         raw_data = yaml.safe_load(raw_text) or {}
-    except Exception as e:
+    except yaml.YAMLError as e:
+        # Здесь намеренно поднимается единая ошибка загрузки, чтобы не “протекали” детали yaml наружу.
         raise ConfigLoadError(f"Нарушена структура YAML файла: {cfg_path}\n{e}") from e
 
     try:
+        # Валидация и приведение типов (в т.ч. Path, PositiveInt/PositiveFloat, Literal, вложенные модели)
         return AppConfig.model_validate(raw_data)
     except ValidationError as e:
         raise ConfigLoadError(f"Неверная конфигурация в {cfg_path}:\n{e}") from e

@@ -1,13 +1,33 @@
-ftp_root: "/pub/support/galaktika/bug_fix/GAL910/UPDATES/"
-ftp_timeout_sec: 5
+# config.yaml — настройки приложения синхронизации локального и FTP репозиториев.
+# Все значения валидируются моделью AppConfig (Pydantic).
+# Важно: в AppConfig стоит extra="forbid" — любые неизвестные ключи вызовут ошибку загрузки.
 
-# ВАЖНО: для Windows путей нужны одинарные кавычки
-local_dir: 'c:\Дистрибутив\PREPARE_DEBUG'
+# --- FTP (удалённый репозиторий) ---
+ftp_root: "/pub/support/galaktika/bug_fix/GAL910/UPDATES/"  # Корень на FTP
+ftp_timeout_sec: 5  # Таймаут сетевых операций, секунды (>0)
 
+# Эти параметры есть в AppConfig, но сейчас не заданы (будут взяты дефолты):
+# ftp_repeat: 3                # Количество повторов при сетевой ошибке
+# ftp_retry_delay_seconds: 1   # Пауза между повторами, секунды
+# ftp_blocksize: 65536         # Размер блока чтения при скачивании, байты
+
+# --- Локальный репозиторий ---
+# ВАЖНО: для Windows путей нужны одинарные кавычки (или экранирование '\').
+# В одинарных кавычках backslash не является escape — можно писать и одинарные, и двойные '\'.
+local_dir: 'c:\\Дистрибутив\\PREPARE'  # Базовая папка.
+
+# Можно переопределить явно (если нужно):
+# Если new_dir/old_dir не заданы — будут local_dir/NEW и local_dir/OLD
+# new_dir:
+# old_dir:
+
+# --- Списки файлов ---
 add_list:
-  - UPDATES.sfv
+  - UPDATES.sfv   # Список "добавляемых" файлов.
+  # Эти файлы будут скачены, если будет запланирован к скачиывнию хотя бы один файл.
 
 stop_list:
+  # Файлы-исключения: то, что не должно скачиваться/обрабатываться
   - Z_STAFFDOPREPORTS_RES.acd
   - Z_STAFFREPORTS_RES.acd
   - F_GOZREPORT_RES.acd
@@ -20,10 +40,17 @@ stop_list:
   - C_Tune_RES.txt
   - Z_Calendar_RES.txt
 
+# --- Поведение (не задано — возьмутся дефолты из AppConfig) ---
+# verify_mode: "md5_hash"       # "size" или "md5_hash"
+# date_file: "date_file"        # Служебный файл (путь)
+
+# --- Logging (loguru) ---
 logging:
   console:
-    level: "INFO"
+    level: "INFO"   # Уровень логов в консоль
   file:
-    level: "DEBUG"
-    path: "sync.log"
-    rotation: "1 MB"
+    level: "DEBUG"  # Уровень логов в файл
+    path: "sync.log"  # Файл лога (абсолютный или относительный путь — от рабочей директории запуска)
+    rotation: "1 MB"  # Ротация loguru: например "1 MB", "1 day", "00:00" и т.п.
+    # retention: "7 days"  # (опционально) хранить N дней/период
+    # compression: "zip"   # (опционально) сжимать архивы

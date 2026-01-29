@@ -71,7 +71,7 @@ class DiffPlanner:
         Сравнение производится по *имени файла* (basename), без учёта каталогов.
     """
 
-    def run(self, data: DiffInput) -> tuple[DiffPlan, ReportItems]:
+    def run(self, data: DiffInput) -> tuple[DiffPlan, bool, ReportItems]:
         """Сравнивает локальные и удалённые файлы и возвращает план + отчёт.
 
         Parameters
@@ -95,7 +95,9 @@ class DiffPlanner:
         )
         report = self._build_report(sync_plan.denied_download)
 
+        is_valid = False
         if len(plan.to_download) == 0 and len(plan.to_delete) == 0 and len(report) == 0:
+            is_valid = True
             report.append(
                 ReportItem(
                     name="",
@@ -104,7 +106,7 @@ class DiffPlanner:
                 )
             )
 
-        return plan, report
+        return plan, is_valid, report
 
     def _build_sync_plan(self, data: DiffInput) -> SyncPlan:
         """Формирует промежуточный `SyncPlan` из двух снимков.

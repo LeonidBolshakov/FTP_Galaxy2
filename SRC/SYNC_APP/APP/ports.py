@@ -34,7 +34,7 @@ class SnapshotService(Protocol):
 
 # ---------- diff ----------
 class DiffPlanner(Protocol):
-    def run(self, data: DiffInput) -> tuple[DiffPlan, ReportItems]: ...
+    def run(self, data: DiffInput) -> tuple[DiffPlan, bool, ReportItems]: ...
 
 
 # ---------- transfer ----------

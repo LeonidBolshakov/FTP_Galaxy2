@@ -85,7 +85,7 @@ class SaveService:
                 ReportItem(
                     name="",
                     status=StatusReport.INFO,
-                    comment=f"Из директории NEW в основную диреторию перемещено {count_new_files} файла/файлов",
+                    comment=f"Из директории NEW в основную директорию перемещено {count_new_files} файла/файлов",
                 )
             )
 

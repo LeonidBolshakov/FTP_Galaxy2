@@ -56,18 +56,11 @@ class ReportService:
             Итоговый флаг успешности (агрегированный по этапам, как передал контроллер)
         report
             Элементы отчёта (ошибки/предупреждения/информационные сообщения).
-
-        Notes
-        -----
-        Логика ветвления здесь целиком определяет формулировки "успех/ошибка".
         """
-        if valid_commit and len(report) != 0:
+        if valid_commit:
             console.print(
                 "[green]Синхронизация завершена.[/green] Репозитории синхронны"
             )
-            return
-        if valid_commit and len(report) == 0:
-            console.print("[bold green] *** -->Обновлений нет.<-- ***[/bold green]")
             return
 
         console.print("[bright_yellow]Обнаружены ошибки синхронизации.[/bright_yellow]")

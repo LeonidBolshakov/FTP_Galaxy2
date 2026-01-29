@@ -138,8 +138,12 @@ class SyncController:
         # Снимки "до" (облегчённый режим: быстро и достаточно для построения плана).
         local_snap_before, remote_snap_before = self._get_lite_snapshots()
 
-        plan_before, report, is_validate_plan = self._plan_diff(
-            local_snap=local_snap_before, remote_snap=remote_snap_before
+        plan_before, is_validate_plan, report = self.diff_planner.run(
+            DiffInput(
+                context=self.runtime_context,
+                local_snap=local_snap_before,
+                remote_snap=remote_snap_before,
+            )
         )
         general_report += report
 
@@ -212,40 +216,6 @@ class SyncController:
         )
 
         return local_before, remote_before
-
-    def _plan_diff(
-            self, local_snap: RepositorySnapshot, remote_snap: RepositorySnapshot
-    ) -> tuple[DiffPlan, ReportItems, bool]:
-        """Строит план различий между локальным и удалённым снимками.
-
-        Режим применения stop-list задаётся в `runtime_context.mode_stop_list` (значение `ModeDiffPlan`) и используется `DiffPlanner` через `context`.
-
-        Parameters
-        ----------
-        local_snap
-            Снимок локального репозитория (обычно LITE_MODE).
-        remote_snap
-            Снимок удалённого репозитория (обычно LITE_MODE).
-
-        Returns
-        -------
-        tuple[DiffPlan, ReportItems, bool]
-            plan
-                План различий (скачать/удалить и т. п.).
-            report
-                Список сообщений/ошибок планирования.
-            is_valid
-                True, если `report` пуст (план считается валидным).
-        """
-        plan, report = self.diff_planner.run(
-            DiffInput(
-                context=self.runtime_context,
-                local_snap=local_snap,
-                remote_snap=remote_snap,
-            )
-        )
-
-        return plan, report, True if len(report) == 0 else False
 
     def _download(self, plan: DiffPlan) -> tuple[bool, ReportItems]:
         """Скачивает файлы согласно плану.

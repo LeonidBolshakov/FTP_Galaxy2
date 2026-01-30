@@ -46,7 +46,7 @@ class ExecutionGate:
             last_run = file.read_text().strip()
         except (FileNotFoundError, PermissionError, OSError) as e:
             # Если служебный файл недоступен — не блокируем запуск, но пишем debug.
-            logger.debug(
+            logger.warning(
                 "Не смогли прочитать информацию из служебного файла\n"
                 f"{e}\n"
                 f"Выполняем запуск программы"

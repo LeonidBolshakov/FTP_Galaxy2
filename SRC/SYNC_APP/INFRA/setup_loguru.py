@@ -42,9 +42,6 @@ def _ensure_parent_dir_for_file_sink(path_like: Any) -> None:
 
     Returns:
         None.
-
-    Raises:
-        OSError: если не удалось создать директорию.
     """
     if isinstance(path_like, (str, Path)):
         path = Path(path_like)
@@ -76,7 +73,6 @@ def setup_loguru(
         config: RuntimeContext,
         *,
         pause_on_file_error: bool = True,
-        raise_on_file_error: bool = True,
 ) -> None:
     """Инициализирует Loguru на основе настроек приложения.
 
@@ -98,16 +94,10 @@ def setup_loguru(
         pause_on_file_error: Если True — ждёт подтверждения пользователя (Enter),
             когда файловый sink не удалось зарегистрировать. Пауза выполняется
             только если доступен TTY.
-        raise_on_file_error: Если True — после сообщения/паузы выбрасывает
             исключение, чтобы остановить программу.
 
     Returns:
         None. Функция настраивает глобальный singleton `logger` из Loguru.
-
-    Raises:
-        PermissionError/FileNotFoundError/OSError/ValueError/TypeError:
-            если raise_on_file_error=True и файловый sink не удалось
-            зарегистрировать.
     """
     # Сбрасываем sinks, чтобы повторная настройка не дублировала вывод.
     logger.remove()

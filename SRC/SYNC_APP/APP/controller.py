@@ -148,7 +148,13 @@ class SyncController:
         general_report += report
 
         # Скачивание файлов по плану; ошибки на отдельных файлах отражаются в report.
-        is_validate_download, report = self._download(plan=plan_before)
+        is_validate_download, report = self.transfer_service.run(
+            TransferInput(
+                context=self.runtime_context,
+                ftp=self.ftp,
+                snapshots_for_loading=plan_before.to_download,
+            )
+        )
         general_report += report
 
         # Полные снимки — только для тех файлов, которые скачивали по плану.
@@ -183,6 +189,7 @@ class SyncController:
         general_report += report_repositoty_error
 
         # Итоговый флаг успешности всех этапов (используется для отчёта).
+        print(f"{is_validate_plan=}, {is_validate_commit=}, {is_validate_download=}")
         is_validate = all([is_validate_plan, is_validate_commit, is_validate_download])
         self.put_report(is_validate=is_validate, general_report=general_report)
 
@@ -216,30 +223,6 @@ class SyncController:
         )
 
         return local_before, remote_before
-
-    def _download(self, plan: DiffPlan) -> tuple[bool, ReportItems]:
-        """Скачивает файлы согласно плану.
-
-        Parameters
-        ----------
-        plan
-            План различий, содержащий список файлов для скачивания.
-
-        Returns
-        -------
-        tuple[bool, ReportItems]
-            is_valid
-                Флаг успешности скачивания (как определено `TransferService`)
-            report
-                Отчёт по скачиванию (включая ошибки по отдельным файлам).
-        """
-        return self.transfer_service.run(
-            TransferInput(
-                context=self.runtime_context,
-                ftp=self.ftp,
-                snapshots_for_loading=plan.to_download,
-            )
-        )
 
     def _get_full_snapshots_only_for(
             self, plan: DiffPlan, new_dir: Path

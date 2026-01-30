@@ -95,14 +95,13 @@ class DiffPlanner:
         )
         report = self._build_report(sync_plan.denied_download)
 
-        is_valid = False
+        is_valid = True
         if len(plan.to_download) == 0 and len(plan.to_delete) == 0 and len(report) == 0:
-            is_valid = True
             report.append(
                 ReportItem(
                     name="",
                     status=StatusReport.IMPORTANT_INFO,
-                    comment="Директории синхронны. К скачиваню ничего не запланировано.",
+                    comment="Обновлений нет. К скачиваню ничего не запланировано.",
                 )
             )
 

@@ -95,8 +95,13 @@ class DiffPlanner:
         )
         report = self._build_report(sync_plan.denied_download)
 
-        is_valid = True
-        if len(plan.to_download) == 0 and len(plan.to_delete) == 0 and len(report) == 0:
+        is_valid = len(sync_plan.denied_download) == 0
+        if (
+                is_valid
+                and len(plan.to_download) == 0
+                and len(plan.to_delete) == 0
+                and len(report) == 0
+        ):
             report.append(
                 ReportItem(
                     name="",

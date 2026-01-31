@@ -189,7 +189,6 @@ class SyncController:
         general_report += report_repositoty_error
 
         # Итоговый флаг успешности всех этапов (используется для отчёта).
-        print(f"{is_validate_plan=}, {is_validate_commit=}, {is_validate_download=}")
         is_validate = all([is_validate_plan, is_validate_commit, is_validate_download])
         self.put_report(is_validate=is_validate, general_report=general_report)
 
@@ -310,8 +309,8 @@ class SyncController:
                     context=self.runtime_context, delete=valid_commit_inpit.delete
                 )
             )
-            # Фиксируем факт успешного выполнения, чтобы ExecutionGate мог пропускать повторы.
-            self.execution_gate.record_run(ctx=self.runtime_context)
+        # Фиксируем факт выполнения.
+        self.execution_gate.record_run(ctx=self.runtime_context)
 
         return is_validate_commit, report_validate + report_commit
 

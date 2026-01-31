@@ -144,22 +144,14 @@ class SaveService:
         return count_files
 
     def _replace_file(self, file_full_path: Path, target_full_path: Path) -> None:
-        if not file_full_path.is_file():
-            raise LocalFileAccessError(
-                f"Ошибка в списке компонент репозитория. Это не файл или файл отсутсвует.\n"
-                f"{file_full_path.name}"
-            )
+        self._enshure_is_file(file_full_path)
         try:
             file_full_path.replace(target_full_path)
         except PermissionError:
             raise LocalFileAccessError(f"Нет доступа к файлу {file_full_path}")
 
     def _safe_copy_file(self, from_full_path: Path, to_full_path: Path) -> None:
-        if not from_full_path.is_file():
-            raise LocalFileAccessError(
-                f"Ошибка в списке компонент репозитория. Это не файл или файл отсутсвует.\n"
-                f"{from_full_path.name}"
-            )
+        self._enshure_is_file(from_full_path)
         safe_mkdir(to_full_path.parent)
 
         tmp: Path | None = None
@@ -190,3 +182,11 @@ class SaveService:
             raise ConfigError(f"Не задан параметр {param}")
 
         return Path(attr)
+
+    @staticmethod
+    def _enshure_is_file(path: Path) -> None:
+        if not path.is_file():
+            raise LocalFileAccessError(
+                f"Ошибка в списке компонент репозитория. Это не файл или файл отсутсвует.\n"
+                f"{path.name}"
+            )

@@ -58,7 +58,7 @@ class ExecutionGate:
             logger.info(
                 "Программа сегодня уже запускалась\n"
                 "Для повторного запуска удалите параметр --once_per_day\n"
-                f"или файл {file.absolute()}\nили дождитесь конца суток"
+                f"или файл {file.absolute()}\nили дождитесь следующих суток"
             )
             return ExecutionChoice.SKIP
 
@@ -82,7 +82,7 @@ class ExecutionGate:
 
         try:
             file.parent.mkdir(parents=True, exist_ok=True)
-            file.write_text(self._today_stamp())
+            file.write_text(self._today_stamp().strip())
         except (PermissionError, OSError) as e:
             # Запуск уже произошёл, поэтому не блокируем выполнение,
             # но фиксируем проблему в логах.

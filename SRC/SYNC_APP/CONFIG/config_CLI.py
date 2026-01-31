@@ -2,7 +2,7 @@ from pathlib import Path
 
 import argparse
 
-from SRC.SYNC_APP.APP.dto import ModeDiffPlan
+from SRC.SYNC_APP.APP.dto import ModeDiffPlan, ConfigError
 from SRC.SYNC_APP.CONFIG.default_config import get_default_config_path
 
 _MODE_MAP = {
@@ -23,11 +23,10 @@ def mode_type(s: str) -> ModeDiffPlan:
 
 def parse_args() -> argparse.Namespace:
     default_config = get_default_config_path()
-    p = argparse.ArgumentParser(prog="Sync_FTP_Galaxy")
+    p = argparse.ArgumentParser(prog="Sync_FTP_Galaxy", exit_on_error=False)
     p.add_argument(
         "--config",
         type=Path,
-        nargs="?",  # ← делает аргумент необязательным
         default=default_config,  # ← значение по умолчанию
         help="Путь к файлу конфигурации (по умолчанию: config.yaml)",
     )
@@ -43,4 +42,7 @@ def parse_args() -> argparse.Namespace:
         default=ModeDiffPlan.USE_STOP_LIST,
         help="Режим diff-плана: stop-list (использовать stop список) | no-list (не использовать список)",
     )
-    return p.parse_args()
+    try:
+        return p.parse_args()
+    except argparse.ArgumentError as e:
+        raise ConfigError(f"Ошибка в параметрах вызова прграммы\n{e}") from None

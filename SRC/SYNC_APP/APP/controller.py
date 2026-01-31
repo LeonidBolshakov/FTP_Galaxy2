@@ -192,9 +192,6 @@ class SyncController:
         is_validate = all([is_validate_plan, is_validate_commit, is_validate_download])
         self.put_report(is_validate=is_validate, general_report=general_report)
 
-        # CLI-пауза: позволяет пользователю прочитать вывод перед закрытием окна.
-        input("Для окончания работы нажмите ENTER")
-
     # -----
     #
     # -----

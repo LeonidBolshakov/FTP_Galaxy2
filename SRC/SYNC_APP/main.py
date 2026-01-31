@@ -65,7 +65,11 @@ def main() -> int:
     """
 
     # Разбор аргументов CLI и загрузка cinfig c параметрами.
-    args = parse_args()
+    try:
+        args = parse_args()
+    except ConfigError as e:
+        print(str(e))
+        return 2
     try:
         # Загрузка конфигурации приложения из файла.
         app = config.load_config(args.config)
@@ -137,5 +141,10 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    # Пробрасываем код завершения `main()` в код завершения процесса.
-    sys.exit(main())
+    # Сохраняем код завершения `main()` для переброски в код завершения процесса.
+    rc = main()
+
+    # CLI-пауза: позволяет пользователю прочитать вывод перед закрытием окна.
+    input("Для окончания работы нажмите ENTER")
+
+    sys.exit(rc)

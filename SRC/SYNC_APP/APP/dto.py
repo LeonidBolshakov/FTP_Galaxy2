@@ -55,6 +55,10 @@ class UserAbend(Exception):
     """Остановка выполнения пользователем (например, через UI/команду прерывания)."""
 
 
+class SkipExecute(Exception):
+    """Программу не выполнять"""
+
+
 # fmt: off
 @dataclass(frozen=True)
 class RuntimeContext:

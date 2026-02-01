@@ -30,6 +30,7 @@ from SRC.SYNC_APP.APP.dto import (
     RepositorySnapshot,
     SaveInput,
     ValidCommitInput,
+    SkipExecute,
 )
 from SRC.SYNC_APP.APP.ports import (
     ExecutionGate,
@@ -130,7 +131,7 @@ class SyncController:
         """
         # При необходимости пропускаем запуск (например, ограничение "once per day").
         if self.execution_gate.check(self.runtime_context) == ExecutionChoice.SKIP:
-            return
+            raise SkipExecute
 
         general_report: ReportItems = []
         new_dir = self.runtime_context.app.new_dir_path

@@ -43,6 +43,7 @@ from SRC.SYNC_APP.APP.dto import (
     ConfigError,
     FTPInput,
     UserAbend,
+    SkipExecute,
 )
 
 
@@ -109,6 +110,9 @@ def main() -> int:
         controller.run()
         return 0
 
+    except SkipExecute:
+        return 777
+
     except KeyboardInterrupt:
         logger.error("Остановлено пользователем (Ctrl+C)")
         return 130
@@ -145,6 +149,7 @@ if __name__ == "__main__":
     rc = main()
 
     # CLI-пауза: позволяет пользователю прочитать вывод перед закрытием окна.
-    input("Для окончания работы нажмите ENTER")
+    if rc != 777:
+        input("Для окончания работы нажмите ENTER")
 
     sys.exit(rc)

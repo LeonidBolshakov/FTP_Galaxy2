@@ -20,6 +20,7 @@ from pydantic import (
 )
 from pydantic_settings import BaseSettings, SettingsConfigDict
 import yaml
+from platformdirs import user_log_dir
 
 
 # ----------------------------
@@ -54,7 +55,7 @@ class FileLoggingConfig(BaseModel):
     """
 
     level: str = "DEBUG"
-    path: str = "../sync.log"
+    path: Path | None = None
     rotation: str = "1 MB"
     format: str = (
         "{time:YYYY-MM-DD HH:mm:ss} | {level:<8} | "
@@ -75,6 +76,23 @@ class LoggingConfig(BaseModel):
 
     console: ConsoleLoggingConfig = ConsoleLoggingConfig()
     file: FileLoggingConfig = FileLoggingConfig()
+
+    @model_validator(mode="after")
+    def _derive_file_log_path(self) -> Self:
+        """
+        Если путь к лог-файлу не задан явно — используем системную
+        пользовательскую директорию логов.
+        """
+        if self.file.path is None:
+            log_dir = Path(
+                user_log_dir(
+                    appname="FTP-Galaxy2",
+                    appauthor="Bolshakov",
+                )
+            )
+            log_dir.mkdir(parents=True, exist_ok=True)
+            self.file.path = log_dir / "sync.log"
+        return self
 
 
 # ----------------------------
@@ -116,7 +134,7 @@ class AppConfig(BaseSettings):
     verify_mode                     : Literal["size", "md5_hash"]    = "md5_hash"
 
     # Служебные файлы
-    date_file                       : Path                          = Path("date_file")
+    date_file                       : Path | None                    = None
 
     # Logging
     logging: LoggingConfig = LoggingConfig()
@@ -142,6 +160,15 @@ class AppConfig(BaseSettings):
             self.new_dir = self.local_dir / "NEW"
         if self.old_dir is None:
             self.old_dir = self.local_dir / "OLD"
+        return self
+
+    @model_validator(mode="after")
+    def _derive_service_files(self) -> Self:
+        """
+        Если date_file не задан — размещаем его в директории логов.
+        """
+        if self.date_file is None:
+            self.date_file = self.logging.file.path.parent / "date_file"
         return self
 
     @property

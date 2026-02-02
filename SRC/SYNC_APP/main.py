@@ -150,6 +150,9 @@ if __name__ == "__main__":
 
     # CLI-пауза: позволяет пользователю прочитать вывод перед закрытием окна.
     if rc != 777:
-        input("Для окончания работы нажмите ENTER")
+        try:
+            input("Для окончания работы нажмите ENTER")
+        except KeyboardInterrupt:
+            pass
 
     sys.exit(rc)

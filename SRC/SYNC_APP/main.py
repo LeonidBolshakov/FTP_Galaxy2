@@ -16,35 +16,30 @@
 - 130 — остановлено пользователем (Ctrl+C)
 """
 
-from ftplib import FTP
 import sys
 from contextlib import suppress
+from datetime import date
+from pathlib import Path
 
-from loguru import logger
 
-from SRC.SYNC_APP.CONFIG import config
-from SRC.SYNC_APP.CONFIG.config_CLI import parse_args
-from SRC.SYNC_APP.APP.SERVICES.save_service import SaveService
-from SRC.SYNC_APP.ADAPTERS.ftp import Ftp
-from SRC.SYNC_APP.APP.controller import SyncController
-from SRC.SYNC_APP.APP.SERVICES.snapshot_service import SnapshotService
-from SRC.SYNC_APP.APP.SERVICES.diff_planer import DiffPlanner
-from SRC.SYNC_APP.APP.SERVICES.transfer_service import TransferService
-from SRC.SYNC_APP.APP.SERVICES.validate_service import ValidateService
-from SRC.SYNC_APP.APP.SERVICES.repository_validator import RepositoryValidator
-from SRC.SYNC_APP.APP.SERVICES.report_service import ReportService
-from SRC.SYNC_APP.INFRA.executiongate import ExecutionGate
-from SRC.SYNC_APP.INFRA.setup_loguru import setup_loguru
-from SRC.SYNC_APP.APP.dto import (
-    RuntimeContext,
-    DownloadDirError,
-    ConnectError,
-    LocalFileAccessError,
-    ConfigError,
-    FTPInput,
-    UserAbend,
-    SkipExecute,
-)
+def _date_file_path() -> Path:
+    # важно: импорт внутри — чтобы "быстрый выход" не тянул лишнее
+    from platformdirs import user_log_dir
+
+    log_dir = Path(user_log_dir(appname="FTP-Galaxy2", appauthor="Bolshakov"))
+    return log_dir / "date_file"
+
+
+def _already_ran_today() -> bool:
+    try:
+        last = _date_file_path().read_text(encoding="utf-8").splitlines()[0].strip()
+    except FileNotFoundError:
+        return False
+    except Exception:
+        # если файл битый/пустой/нет доступа — лучше выполнить, чем "залипнуть" навсегда
+        return False
+
+    return last == date.today().isoformat()
 
 
 def main() -> int:
@@ -65,12 +60,47 @@ def main() -> int:
         int: код завершения процесса.
     """
 
-    # Разбор аргументов CLI и загрузка cinfig c параметрами.
+    # Разбор аргументов CLI и загрузка config c параметрами.
+    # (импортируем только то, что нужно для раннего решения "запускать/не запускать")
+
+    from SRC.SYNC_APP.CONFIG.config_CLI import parse_args
+    from SRC.SYNC_APP.APP.dto import ConfigError
+
     try:
         args = parse_args()
     except ConfigError as e:
         print(str(e))
         return 2
+
+    # Быстрый выход "раз в сутки" — ДО тяжёлых импортов/инициализации/FTP
+    if getattr(args, "once_per_day", False) and _already_ran_today():
+        return 777
+
+    # Дальше можно тянуть всё тяжёлое
+    from ftplib import FTP
+    from loguru import logger
+    from SRC.SYNC_APP.CONFIG import config
+    from SRC.SYNC_APP.APP.SERVICES.save_service import SaveService
+    from SRC.SYNC_APP.ADAPTERS.ftp import Ftp
+    from SRC.SYNC_APP.APP.controller import SyncController
+    from SRC.SYNC_APP.APP.SERVICES.snapshot_service import SnapshotService
+    from SRC.SYNC_APP.APP.SERVICES.diff_planer import DiffPlanner
+    from SRC.SYNC_APP.APP.SERVICES.transfer_service import TransferService
+    from SRC.SYNC_APP.APP.SERVICES.validate_service import ValidateService
+    from SRC.SYNC_APP.APP.SERVICES.repository_validator import RepositoryValidator
+    from SRC.SYNC_APP.APP.SERVICES.report_service import ReportService
+    from SRC.SYNC_APP.INFRA.executiongate import ExecutionGate
+    from SRC.SYNC_APP.INFRA.setup_loguru import setup_loguru
+    from SRC.SYNC_APP.APP.dto import (
+        RuntimeContext,
+        DownloadDirError,
+        ConnectError,
+        LocalFileAccessError,
+        FTPInput,
+        UserAbend,
+        SkipExecute,
+    )
+
     try:
         # Загрузка конфигурации приложения из файла.
         app = config.load_config(args.config)
@@ -145,7 +175,7 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    # Сохраняем код завершения `main()` для переброски в код завершения процесса.
+    # Сохраняем код завершения `main()` для анализа и переброски в код завершения процесса.
     rc = main()
 
     # CLI-пауза: позволяет пользователю прочитать вывод перед закрытием окна.

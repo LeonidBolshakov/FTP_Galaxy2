@@ -26,7 +26,7 @@ def main() -> None:
 
     # Копируем конфиг рядом с exe (в dist)
     dist.mkdir(exist_ok=True)
-    shutil.copy2(cfg, dist / "config.yaml")
+    shutil.copy2(cfg, dist / "FTP_galaxy_2" / "config.yaml")
 
     print("Файл exe построен!")
     print(rf'config.yaml, используемые по умолчанию, находится - {dist}\"config.yaml"')

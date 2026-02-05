@@ -39,7 +39,7 @@ def parse_args() -> argparse.Namespace:
         "--mode",
         type=mode_type,
         choices=list(_MODE_MAP.values()),
-        default=ModeDiffPlan.USE_STOP_LIST,
+        default=ModeDiffPlan.NOT_USE_STOP_LIST,
         help="Режим diff-плана: stop-list (использовать stop список) | no-list (не использовать список)",
     )
     try:

@@ -1,0 +1,26 @@
+from dataclasses import dataclass
+
+from SRC.DIGEST_APP.CONFIG.config import DigestConfig
+
+
+@dataclass(frozen=True)
+class RuntimeContext:
+    """Контекст выполнения приложения.
+
+    Содержит конфигурацию и параметры запуска, которые передаются в сервисы/адаптеры.
+
+    Attributes
+    ----------
+    """
+
+    app: DigestConfig
+
+
+@dataclass(frozen=True)
+class DescriptionOfNewTask:
+    task: str
+    first_solution: str
+    component: list[str]
+    description: str
+    what_has_changed: str
+    how_it_changed: str

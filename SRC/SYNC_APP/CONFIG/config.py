@@ -3,7 +3,7 @@
 
 Содержит:
 - Pydantic-модели для настроек логирования (консоль/файл).
-- Основную модель настроек приложения (AppConfig) на базе BaseSettings.
+- Основную модель настроек приложения (SyncConfig) на базе BaseSettings.
 - Функцию load_config() для чтения YAML и валидации конфигурации.
 """
 
@@ -12,16 +12,15 @@ from typing import Literal, cast, Self
 
 from pydantic import (
     BaseModel,
-    ValidationError,
     model_validator,
     PositiveInt,
     PositiveFloat,
     Field,
 )
-from pydantic_settings import BaseSettings, SettingsConfigDict
-import yaml
+from pydantic_settings import SettingsConfigDict
 from platformdirs import user_log_dir
 
+from SRC.GENERAL.config import CommonConfig
 
 # ----------------------------
 # Logging config (loguru)
@@ -48,7 +47,7 @@ class FileLoggingConfig(BaseModel):
     Attributes:
         level: Уровень логирования для файла.
         path: Путь к файлу лога (относительный или абсолютный).
-        rotation: Правило ротации (например, "1 MB", "1 day" и т.п. по правилам loguru).
+        rotation: Правило ротации (например, "1 MB", "1 day" и т.п по правилам loguru).
         format: Формат записи в файл.
         retention: Политика хранения старых логов (опционально).
         compression: Сжатие архивов логов (опционально).
@@ -100,7 +99,7 @@ class LoggingConfig(BaseModel):
 # ----------------------------
 
 
-class AppConfig(BaseSettings):
+class SyncConfig(CommonConfig):
     """
     Конфигурация приложения.
 
@@ -126,8 +125,6 @@ class AppConfig(BaseSettings):
     add_list                        : list[str]                     = Field(default_factory=list)
 
     # Локальный репозиторий
-    local_dir                       : Path                          = Path("C:\\Дистрибутив\\PREPARE\\")
-    new_dir                         : Path | None                   = None
     old_dir                         : Path | None                   = None
 
     # Поведение
@@ -137,7 +134,7 @@ class AppConfig(BaseSettings):
     date_file                       : Path | None                    = None
 
     # Logging
-    logging: LoggingConfig = LoggingConfig()
+    logging: LoggingConfig          = LoggingConfig()
     # fmt: on
 
     @model_validator(mode="after")
@@ -168,7 +165,8 @@ class AppConfig(BaseSettings):
         Если date_file не задан — размещаем его в директории логов.
         """
         if self.date_file is None:
-            self.date_file = self.logging.file.path.parent / "date_file"
+            log_path = cast(Path, self.logging.file.path)
+            self.date_file = log_path.parent / "date_file"
         return self
 
     @property
@@ -195,59 +193,3 @@ class AppConfig(BaseSettings):
         # Запрещаем неизвестные ключи в YAML, чтобы не “проглатывать” опечатки.
         extra="forbid",
     )
-
-
-# ----------------------------
-# Загрузка конфигурации
-# ----------------------------
-
-
-class ConfigLoadError(RuntimeError):
-    """
-    Ошибка загрузки/разбора/валидации конфигурации.
-
-    Используется как единый тип исключения для внешнего слоя приложения.
-    """
-
-    pass
-
-
-def load_config(path: str | Path) -> AppConfig:
-    """
-    Загружает конфигурацию из YAML-файла и валидирует её через AppConfig.
-
-    Args:
-        path: Путь к YAML-файлу конфигурации (str или Path).
-
-    Returns:
-        Валидированный экземпляр AppConfig.
-
-    Raises:
-        ConfigLoadError:
-            - если файл не найден;
-            - если файл нельзя прочитать (ошибка ОС/доступа);
-            - если YAML некорректен (ошибка парсинга/структуры);
-            - если данные не проходят валидацию Pydantic (ValidationError).
-    """
-    cfg_path = Path(path)
-
-    if not cfg_path.exists():
-        raise ConfigLoadError(f"Config файл не найден: {cfg_path}")
-
-    try:
-        raw_text = cfg_path.read_text(encoding="utf-8")
-    except OSError as e:
-        raise ConfigLoadError(f"Неудачное чтение config файла: {cfg_path}\n{e}") from e
-
-    try:
-        # safe_load возвращает python-структуру (dict/list/str/None...). Пустой файл -> None.
-        raw_data = yaml.safe_load(raw_text) or {}
-    except yaml.YAMLError as e:
-        # Здесь намеренно поднимается единая ошибка загрузки, чтобы не “протекали” детали yaml наружу.
-        raise ConfigLoadError(f"Нарушена структура YAML файла: {cfg_path}\n{e}") from e
-
-    try:
-        # Валидация и приведение типов (в т.ч. Path, PositiveInt/PositiveFloat, Literal, вложенные модели)
-        return AppConfig.model_validate(raw_data)
-    except ValidationError as e:
-        raise ConfigLoadError(f"Неверная конфигурация в {cfg_path}:\n{e}") from e

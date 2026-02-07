@@ -30,8 +30,8 @@ from SRC.SYNC_APP.APP.dto import (
     RepositorySnapshot,
     SaveInput,
     ValidCommitInput,
-    SkipExecute,
 )
+
 from SRC.SYNC_APP.APP.ports import (
     ExecutionGate,
     SnapshotService,
@@ -43,12 +43,13 @@ from SRC.SYNC_APP.APP.ports import (
     ReportService,
 )
 
+from GENERAL.errors import SkipExecute
+
 
 class SyncController:
     """Оркестратор этапов синхронизации.
 
     Параметры (зависимости) передаются извне — контроллер не создаёт сервисы сам.
-    Это упрощает тестирование и позволяет менять реализации портов без изменения контроллера.
 
     Атрибуты:
         ftp: адаптер FTP (порт/адаптер к инфраструктуре).

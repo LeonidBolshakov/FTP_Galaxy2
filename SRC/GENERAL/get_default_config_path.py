@@ -15,7 +15,7 @@ def external_default_config() -> Path:
     return exe_dir() / "config.yaml"
 
 
-def embedded_default_config() -> Path:
+def built_in_default_config() -> Path:
     # то, что PyInstaller положит во временную папку onefile
     base = Path(getattr(sys, "_MEIPASS", exe_dir()))
     return base / "config.yaml"  # если add-data кладём в "."

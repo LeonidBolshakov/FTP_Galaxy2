@@ -2,8 +2,9 @@ from pathlib import Path
 
 import argparse
 
-from SRC.SYNC_APP.APP.dto import ModeDiffPlan, ConfigError
-from SRC.SYNC_APP.CONFIG.default_config import get_default_config_path
+from SRC.GENERAL.errors import ConfigError
+from SRC.SYNC_APP.APP.dto import ModeDiffPlan
+from SRC.GENERAL.get_default_config_path import get_default_config_path
 
 _MODE_MAP = {
     "stop-list": ModeDiffPlan.USE_STOP_LIST,

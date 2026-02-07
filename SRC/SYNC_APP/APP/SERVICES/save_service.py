@@ -9,13 +9,11 @@ from loguru import logger
 from SRC.SYNC_APP.APP.dto import (
     SaveInput,
     FileSnapshot,
-    ConfigError,
-    LocalFileAccessError,
     ReportItems,
     ReportItem,
-    UserAbend,
     StatusReport,
 )
+from SRC.GENERAL.errors import ConfigError, LocalFileAccessError, UserAbend
 from SRC.SYNC_APP.INFRA.utils import (
     prompt_action,
     clean_dir,

@@ -26,13 +26,12 @@ from SRC.SYNC_APP.INFRA.utils import fs_call
 from SRC.SYNC_APP.APP.dto import (
     FTPInput,
     FileSnapshot,
-    ConnectError,
-    DownloadDirError,
-    DownloadFileError,
     DownloadDirFtpInput,
     ModeSnapshot,
     RepositorySnapshot,
 )
+
+from SRC.GENERAL.errors import ConnectError, DownloadDirError, DownloadFileError
 
 TEMP_EXCEPTIONS = (
     timeout,

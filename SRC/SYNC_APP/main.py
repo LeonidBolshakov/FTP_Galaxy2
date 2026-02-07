@@ -22,6 +22,8 @@ from contextlib import suppress
 from datetime import date
 from pathlib import Path
 
+from SYNC_APP.CONFIG.config import SyncConfig
+
 
 def _date_file_path() -> Path:
     # важно: импорт внутри — чтобы "быстрый выход" не тянул лишнее
@@ -68,7 +70,7 @@ def main() -> int:
     # (импортируем только то, что нужно для раннего решения "запускать/не запускать")
 
     from SRC.SYNC_APP.CONFIG.config_CLI import parse_args
-    from SRC.SYNC_APP.APP.dto import ConfigError
+    from SRC.GENERAL.errors import ConfigError
 
     try:
         args = parse_args()
@@ -83,7 +85,8 @@ def main() -> int:
     # Дальше можно тянуть всё тяжёлое
     from ftplib import FTP
     from loguru import logger
-    from SRC.SYNC_APP.CONFIG import config
+    from SRC.GENERAL.loadconfig import load_config
+    from SRC.GENERAL.errors import ConfigLoadError
     from SRC.SYNC_APP.APP.SERVICES.save_service import SaveService
     from SRC.SYNC_APP.ADAPTERS.ftp import Ftp
     from SRC.SYNC_APP.APP.controller import SyncController
@@ -97,18 +100,14 @@ def main() -> int:
     from SRC.SYNC_APP.INFRA.setup_loguru import setup_loguru
     from SRC.SYNC_APP.APP.dto import (
         RuntimeContext,
-        DownloadDirError,
-        ConnectError,
-        LocalFileAccessError,
         FTPInput,
-        UserAbend,
-        SkipExecute,
     )
+    from SRC.GENERAL.errors import AppError
 
     try:
         # Загрузка конфигурации приложения из файла.
-        app = config.load_config(args.config)
-    except config.ConfigLoadError as e:
+        app = load_config(args.config, SyncConfig)
+    except ConfigLoadError as e:
         # Для ошибки файла конфигурации используется отдельный код возврата.
         print(f"Ошибка файла конфигурации\n{e}")
         return 2
@@ -144,28 +143,15 @@ def main() -> int:
         controller.run()
         return 0
 
-    except SkipExecute:
-        return 777
-
     except KeyboardInterrupt:
         logger.error("Остановлено пользователем (Ctrl+C)")
         return 130
 
-    except LocalFileAccessError as e:
-        logger.error("Ошибка при обращении к локальным файлам/каталогам:\n{}", e)
-        return 1
-
-    except (ConnectError, DownloadDirError) as e:
-        logger.error("Ошибка в начале работы с FTP сервером:\n{}", e)
-        return 1
-
-    except ConfigError as e:
-        logger.error("Ошибка в конфигурационном файле или параметрах:\n{}", e)
-        return 1
-
-    except UserAbend as e:
-        logger.error("Пользователь прекратил работу:\n{}", e)
-        return 1
+    except AppError as e:
+        ret_code = getattr(e, "exit_code", 1)
+        if ret_code != 777:
+            logger.error("{}:\n{}", getattr(e, "log_message", "Ошибка приложения"), e)
+        return ret_code
 
     except Exception:
         logger.exception("Непредвиденная ошибка\n")

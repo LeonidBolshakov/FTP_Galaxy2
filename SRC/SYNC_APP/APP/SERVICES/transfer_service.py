@@ -23,12 +23,12 @@ from loguru import logger
 from SRC.SYNC_APP.APP.dto import (
     TransferInput,
     FileSnapshot,
-    DownloadFileError,
     Ftp,
     ReportItems,
     ReportItem,
     StatusReport,
 )
+from SRC.GENERAL.errors import DownloadFileError
 from SRC.SYNC_APP.INFRA.utils import prompt_action, clean_dir, fs_call, safe_mkdir
 
 

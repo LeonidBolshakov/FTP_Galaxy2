@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from loguru import logger
 
@@ -111,7 +111,7 @@ def setup_loguru(
     )
     # fmt: on
 
-    file_path = config.app.logging.file.path
+    file_path = cast(Path, config.app.logging.file.path)
 
     try:
         # Проверяем/создаём директорию под файл лога (если это именно путь).

@@ -22,42 +22,9 @@ from typing import Set, TypeAlias, Protocol
 from ftplib import FTP
 from pathlib import Path
 
-from SRC.SYNC_APP.CONFIG.config import AppConfig
+from SRC.SYNC_APP.CONFIG.config import SyncConfig
 
 ReportItems: TypeAlias = list["ReportItem"]
-
-
-class ConnectError(Exception):
-    """Ошибка подключения/инициализации соединения с FTP-сервером."""
-
-
-class DownloadFileError(Exception):
-    """Ошибка скачивания отдельного файла.
-
-    Обычно такая ошибка относится к конкретному файлу и может быть обработана так,
-    чтобы продолжить обработку следующих файлов (в зависимости от политики приложения).
-    """
-
-
-class DownloadDirError(Exception):
-    """Ошибка получения списка файлов/директории на FTP или построения снимка."""
-
-
-class ConfigError(Exception):
-    """Ошибка конфигурации или несогласованности параметров запуска."""
-
-
-class LocalFileAccessError(RuntimeError):
-    """Ошибка доступа к локальной файловой системе (чтение/запись/права/пути)."""
-
-
-class UserAbend(Exception):
-    """Остановка выполнения пользователем (например, через UI/команду прерывания)."""
-
-
-class SkipExecute(Exception):
-    """Программу не выполнять"""
-
 
 # fmt: off
 @dataclass(frozen=True)
@@ -75,7 +42,7 @@ class RuntimeContext:
     mode_stop_list
         Режим применения stop-list при построении плана различий (`ModeDiffPlan`).
     """
-    app                 : AppConfig
+    app                 : SyncConfig
     once_per_day        : bool
     mode_stop_list      : ModeDiffPlan
 
@@ -300,7 +267,6 @@ class Ftp(Protocol):
     def connect(self) -> None: ...
     def close(self) -> None: ...
     def download_dir(self, data: DownloadDirFtpInput) -> RepositorySnapshot: ...
-
     def download_file(self, snapshot: FileSnapshot, local_full_path: Path) -> None: ...
 
 

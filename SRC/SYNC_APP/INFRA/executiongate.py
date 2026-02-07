@@ -1,5 +1,7 @@
 from datetime import date
 from loguru import logger
+from typing import cast
+from pathlib import Path
 
 from SRC.SYNC_APP.APP.dto import RuntimeContext, ExecutionChoice
 
@@ -40,7 +42,7 @@ class ExecutionGate:
         if not ctx.once_per_day:
             return ExecutionChoice.RUN
 
-        file = ctx.app.date_file
+        file = cast(Path, ctx.app.date_file)
 
         try:
             last_run = file.read_text().strip()
@@ -58,7 +60,8 @@ class ExecutionGate:
             logger.info(
                 "Программа сегодня уже запускалась\n"
                 "Для повторного запуска удалите параметр --once_per_day\n"
-                f"или файл {file.absolute()}\nили дождитесь следующих суток"
+                f"или файл {file.absolute()}\n"
+                f"или дождитесь следующих суток"
             )
             return ExecutionChoice.SKIP
 
@@ -78,7 +81,7 @@ class ExecutionGate:
         Args:
             ctx: Контекст выполнения, содержащий путь `ctx.app.date_file`.
         """
-        file = ctx.app.date_file
+        file = cast(Path, ctx.app.date_file)
 
         try:
             file.parent.mkdir(parents=True, exist_ok=True)

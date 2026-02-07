@@ -14,7 +14,7 @@ import os, sys
 from typing import TypeVar, Callable, Sequence, Mapping
 from pathlib import Path
 
-from SRC.SYNC_APP.APP.dto import LocalFileAccessError, ConfigError
+from SRC.GENERAL.errors import LocalFileAccessError, ConfigError
 
 T = TypeVar("T")
 

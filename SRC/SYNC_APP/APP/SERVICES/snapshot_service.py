@@ -23,9 +23,8 @@ from SRC.SYNC_APP.APP.dto import (
     ModeSnapshot,
     DownloadDirFtpInput,
     RepositorySnapshot,
-    ConfigError,
-    DownloadDirError,
 )
+from GENERAL.errors import ConfigError, DownloadDirError
 
 # Размер блока чтения при вычислении md5 (1 MiB)
 CHUNK_SIZE = 1024 * 1024

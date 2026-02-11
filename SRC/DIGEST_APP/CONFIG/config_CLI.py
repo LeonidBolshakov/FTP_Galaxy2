@@ -13,7 +13,7 @@ def parse_args() -> argparse.Namespace:
         "--config",
         type=Path,
         default=default_config,  # ← значение по умолчанию
-        help="Путь к файлу конфигурации (по умолчанию: config.yaml)",
+        help="Путь к файлу конфигурации (по умолчанию: config_digest.yaml)",
     )
     try:
         return p.parse_args()

@@ -16,11 +16,11 @@ class RuntimeContext:
     app: DigestConfig
 
 
-@dataclass(frozen=True)
+@dataclass
 class DescriptionOfNewTask:
     task: str
     first_solution: str
-    component: list[str]
+    components: list[str]
     description: str
     what_has_changed: str
     how_it_changed: str

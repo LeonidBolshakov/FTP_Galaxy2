@@ -27,8 +27,6 @@ class DigestController:
         )
 
         grouped_descriptions = self.make_grouped_descriptions.run(
-            ctx=runtime_context, descriptions=description_of_new_tasks
+            descriptions=description_of_new_tasks
         )
-        self.output_report.run(
-            ctx=runtime_context, descriptions=description_of_new_tasks
-        )
+        self.output_report.run(ctx=runtime_context, descriptions=grouped_descriptions)

@@ -8,17 +8,17 @@ def exe_dir() -> Path:
 
 def dev_default_config() -> Path:
     # твой текущий путь в проекте:
-    return Path(__file__).resolve().parent / "config.yaml"
+    return Path(__file__).resolve().parent / "config_digest.yaml"
 
 
 def external_default_config() -> Path:
-    return exe_dir() / "config.yaml"
+    return exe_dir() / "config_digest.yaml"
 
 
 def built_in_default_config() -> Path:
     # то, что PyInstaller положит во временную папку onefile
     base = Path(getattr(sys, "_MEIPASS", exe_dir()))
-    return base / "config.yaml"  # если add-data кладём в "."
+    return base / "config_digest.yaml"  # если add-data кладём в "."
 
 
 def get_default_config_path() -> Path:

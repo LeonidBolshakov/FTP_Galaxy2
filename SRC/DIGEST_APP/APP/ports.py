@@ -19,9 +19,11 @@ class GetDescriptionOfNewTasks(Protocol):
 
 class MakeGroupedDescriptions(Protocol):
     def run(
-            self, ctx: RuntimeContext, descriptions: Sequence[DescriptionOfNewTask]
-    ) -> Sequence[DescriptionOfNewTask]: ...
+            self, descriptions: Sequence[DescriptionOfNewTask]
+    ) -> list[DescriptionOfNewTask]: ...
 
 
 class OutputReport(Protocol):
-    def run(self, ctx: RuntimeContext, descriptions: DescriptionOfNewTask) -> None: ...
+    def run(
+            self, ctx: RuntimeContext, descriptions: list[DescriptionOfNewTask]
+    ) -> None: ...

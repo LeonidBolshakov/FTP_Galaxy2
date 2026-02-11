@@ -1,17 +1,17 @@
+import traceback
 from SRC.GENERAL.errors import ConfigLoadError, ConfigError
 
 
 def main():
-    from SRC.DIGEST_APP.dummies import (
-        MakeGroupedDescriptions,
-        OutputReport,
-    )
-
     from SRC.DIGEST_APP.APP.controller import DigestController
     from SRC.DIGEST_APP.APP.SERVICES.get_context import GetContext
     from SRC.DIGEST_APP.APP.SERVICES.get_description_of_new_tasks import (
         GetDescriptionOfNewTasks,
     )
+    from SRC.DIGEST_APP.APP.SERVICES.make_grouped_descriptions import (
+        MakeGroupedDescriptions,
+    )
+    from SRC.DIGEST_APP.APP.SERVICES.output_report import OutputReport
 
     context = GetContext()
     digest_controller = DigestController(
@@ -30,11 +30,12 @@ def main():
     except FileNotFoundError as e:
         print(f"Файл не найден:\n{e}")
     except PermissionError as e:
-        print(f"Ошибка доступа к файлу:\n{e}")
+        print(f"❌ Файл открыт в Excel. Закройте его и попробуйте снова.\n{e}")
     except OSError as e:
         print(f"Ошибка ввода-вывода:\n{e}")
     except Exception as e:
         print(f"Неизвестная ошибка:\n{e}")
+        traceback.print_exc()
 
 
 if __name__ == "__main__":

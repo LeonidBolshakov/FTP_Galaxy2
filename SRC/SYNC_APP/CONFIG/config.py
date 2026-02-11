@@ -10,6 +10,8 @@
 from pathlib import Path
 from typing import Literal, cast, Self
 
+from SRC.GENERAL.config import CommonConfig
+
 from pydantic import (
     BaseModel,
     model_validator,
@@ -20,14 +22,12 @@ from pydantic import (
 from pydantic_settings import SettingsConfigDict
 from platformdirs import user_log_dir
 
-from SRC.GENERAL.config import CommonConfig
-
 # ----------------------------
 # Logging config (loguru)
 # ----------------------------
 
 
-class ConsoleLoggingConfig(BaseModel):
+class ConsoleLoggingConfig(CommonConfig):
     """
     Настройки логирования в консоль (loguru).
 
@@ -99,7 +99,7 @@ class LoggingConfig(BaseModel):
 # ----------------------------
 
 
-class SyncConfig(CommonConfig):
+class SyncConfig(CommonConfig, BaseModel):
     """
     Конфигурация приложения.
 

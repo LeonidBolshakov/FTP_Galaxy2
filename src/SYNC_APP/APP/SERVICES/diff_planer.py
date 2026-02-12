@@ -24,8 +24,8 @@ from typing import Mapping
 from operator import attrgetter
 from dataclasses import dataclass
 
-from src.SYNC_APP.INFRA.utils import name_file_to_name_component
-from src.SYNC_APP.APP.dto import (
+from SYNC_APP.INFRA.utils import name_file_to_name_component
+from SYNC_APP.APP.dto import (
     DiffPlan,
     DiffInput,
     FileSnapshot,

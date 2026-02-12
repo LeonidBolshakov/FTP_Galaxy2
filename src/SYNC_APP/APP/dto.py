@@ -22,7 +22,7 @@ from typing import Set, TypeAlias, Protocol
 from ftplib import FTP
 from pathlib import Path
 
-from src.SYNC_APP.CONFIG.config import SyncConfig
+from SYNC_APP.CONFIG.config import SyncConfig
 
 ReportItems: TypeAlias = list["ReportItem"]
 

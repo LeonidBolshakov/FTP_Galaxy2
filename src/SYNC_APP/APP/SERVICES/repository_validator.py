@@ -20,7 +20,7 @@
 from collections import defaultdict
 from pathlib import Path
 
-from src.SYNC_APP.APP.dto import (
+from SYNC_APP.APP.dto import (
     ValidateRepositoryInput,
     ReportItems,
     ReportItem,

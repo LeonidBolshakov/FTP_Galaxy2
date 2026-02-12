@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Set
 import hashlib
 
-from src.SYNC_APP.APP.dto import (
+from SYNC_APP.APP.dto import (
     SnapshotInput,
     FileSnapshot,
     ModeSnapshot,

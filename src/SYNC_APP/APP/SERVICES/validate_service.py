@@ -14,7 +14,7 @@ validate_service.py
 - Возвращает (ok, report), где report — список ReportItem с ERROR/FATAL.
 """
 
-from src.SYNC_APP.APP.dto import (
+from SYNC_APP.APP.dto import (
     ValidateInput,
     ReportItems,
     ReportItem,

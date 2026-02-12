@@ -10,7 +10,7 @@
 from pathlib import Path
 from typing import Literal, cast, Self
 
-from src.GENERAL.config import CommonConfig
+from GENERAL.config import CommonConfig
 
 from pydantic import (
     BaseModel,

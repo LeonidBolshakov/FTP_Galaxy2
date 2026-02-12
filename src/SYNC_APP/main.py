@@ -69,8 +69,8 @@ def main() -> int:
     # Разбор аргументов CLI и загрузка config c параметрами.
     # (импортируем только то, что нужно для раннего решения "запускать/не запускать")
 
-    from src.SYNC_APP.CONFIG.config_CLI import parse_args
-    from src.GENERAL.errors import ConfigError
+    from SYNC_APP.CONFIG.config_CLI import parse_args
+    from GENERAL.errors import ConfigError
 
     try:
         args = parse_args("config_sync.yaml")
@@ -85,24 +85,24 @@ def main() -> int:
     # Дальше можно тянуть всё тяжёлое
     from ftplib import FTP
     from loguru import logger
-    from src.GENERAL.loadconfig import load_config
-    from src.GENERAL.errors import ConfigLoadError
-    from src.SYNC_APP.APP.SERVICES.save_service import SaveService
-    from src.SYNC_APP.ADAPTERS.ftp import Ftp
-    from src.SYNC_APP.APP.controller import SyncController
-    from src.SYNC_APP.APP.SERVICES.snapshot_service import SnapshotService
-    from src.SYNC_APP.APP.SERVICES.diff_planer import DiffPlanner
-    from src.SYNC_APP.APP.SERVICES.transfer_service import TransferService
-    from src.SYNC_APP.APP.SERVICES.validate_service import ValidateService
-    from src.SYNC_APP.APP.SERVICES.repository_validator import RepositoryValidator
-    from src.SYNC_APP.APP.SERVICES.report_service import ReportService
-    from src.SYNC_APP.INFRA.executiongate import ExecutionGate
-    from src.SYNC_APP.INFRA.setup_loguru import setup_loguru
-    from src.SYNC_APP.APP.dto import (
+    from GENERAL.loadconfig import load_config
+    from GENERAL.errors import ConfigLoadError
+    from SYNC_APP.APP.SERVICES.save_service import SaveService
+    from SYNC_APP.ADAPTERS.ftp import Ftp
+    from SYNC_APP.APP.controller import SyncController
+    from SYNC_APP.APP.SERVICES.snapshot_service import SnapshotService
+    from SYNC_APP.APP.SERVICES.diff_planer import DiffPlanner
+    from SYNC_APP.APP.SERVICES.transfer_service import TransferService
+    from SYNC_APP.APP.SERVICES.validate_service import ValidateService
+    from SYNC_APP.APP.SERVICES.repository_validator import RepositoryValidator
+    from SYNC_APP.APP.SERVICES.report_service import ReportService
+    from SYNC_APP.INFRA.executiongate import ExecutionGate
+    from SYNC_APP.INFRA.setup_loguru import setup_loguru
+    from SYNC_APP.APP.dto import (
         RuntimeContext,
         FTPInput,
     )
-    from src.GENERAL.errors import AppError
+    from GENERAL.errors import AppError
 
     try:
         # Загрузка конфигурации приложения из файла.

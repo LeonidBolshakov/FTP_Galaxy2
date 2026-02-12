@@ -3,7 +3,7 @@
 
 from typing import Protocol
 
-from src.SYNC_APP.APP.dto import (
+from SYNC_APP.APP.dto import (
     RuntimeContext,
     DiffPlan,
     SnapshotInput,

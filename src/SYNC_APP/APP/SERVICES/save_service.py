@@ -6,15 +6,15 @@ import shutil
 
 from loguru import logger
 
-from src.SYNC_APP.APP.dto import (
+from SYNC_APP.APP.dto import (
     SaveInput,
     FileSnapshot,
     ReportItems,
     ReportItem,
     StatusReport,
 )
-from src.GENERAL.errors import ConfigError, LocalFileAccessError, UserAbend
-from src.SYNC_APP.INFRA.utils import (
+from GENERAL.errors import ConfigError, LocalFileAccessError, UserAbend
+from SYNC_APP.INFRA.utils import (
     prompt_action,
     clean_dir,
     sure_same_drive,

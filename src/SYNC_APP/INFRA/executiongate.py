@@ -3,7 +3,7 @@ from loguru import logger
 from typing import cast
 from pathlib import Path
 
-from src.SYNC_APP.APP.dto import RuntimeContext, ExecutionChoice
+from SYNC_APP.APP.dto import RuntimeContext, ExecutionChoice
 
 
 class ExecutionGate:

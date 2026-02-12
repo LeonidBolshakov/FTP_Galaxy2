@@ -14,7 +14,7 @@
 
 from pathlib import Path
 
-from src.SYNC_APP.APP.dto import (
+from SYNC_APP.APP.dto import (
     RuntimeContext,
     ExecutionChoice,
     DiffPlan,
@@ -32,7 +32,7 @@ from src.SYNC_APP.APP.dto import (
     ValidCommitInput,
 )
 
-from src.SYNC_APP.APP.ports import (
+from SYNC_APP.APP.ports import (
     ExecutionGate,
     SnapshotService,
     DiffPlanner,

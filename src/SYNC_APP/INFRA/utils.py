@@ -14,7 +14,7 @@ import os, sys
 from typing import TypeVar, Callable, Sequence, Mapping
 from pathlib import Path
 
-from src.GENERAL.errors import LocalFileAccessError, ConfigError
+from GENERAL.errors import LocalFileAccessError, ConfigError
 
 T = TypeVar("T")
 

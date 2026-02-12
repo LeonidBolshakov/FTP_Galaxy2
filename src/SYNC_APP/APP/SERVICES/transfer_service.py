@@ -20,7 +20,7 @@ from typing import assert_never, Callable
 
 from loguru import logger
 
-from src.SYNC_APP.APP.dto import (
+from SYNC_APP.APP.dto import (
     TransferInput,
     FileSnapshot,
     Ftp,
@@ -28,8 +28,8 @@ from src.SYNC_APP.APP.dto import (
     ReportItem,
     StatusReport,
 )
-from src.GENERAL.errors import DownloadFileError
-from src.SYNC_APP.INFRA.utils import prompt_action, clean_dir, fs_call, safe_mkdir
+from GENERAL.errors import DownloadFileError
+from SYNC_APP.INFRA.utils import prompt_action, clean_dir, fs_call, safe_mkdir
 
 
 # fmt: off

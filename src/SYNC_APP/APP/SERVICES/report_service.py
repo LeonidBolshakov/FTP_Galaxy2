@@ -9,7 +9,7 @@
 from rich.console import Console
 from rich.table import Table
 
-from src.SYNC_APP.APP.dto import ReportItems, ReportItemInput, StatusReport
+from SYNC_APP.APP.dto import ReportItems, ReportItemInput, StatusReport
 
 
 class ReportService:

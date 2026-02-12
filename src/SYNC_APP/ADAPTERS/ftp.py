@@ -21,9 +21,9 @@ from dataclasses import dataclass
 
 from loguru import logger
 
-from src.SYNC_APP.INFRA.utils import fs_call
+from SYNC_APP.INFRA.utils import fs_call
 
-from src.SYNC_APP.APP.dto import (
+from SYNC_APP.APP.dto import (
     FTPInput,
     FileSnapshot,
     DownloadDirFtpInput,
@@ -31,7 +31,7 @@ from src.SYNC_APP.APP.dto import (
     RepositorySnapshot,
 )
 
-from src.GENERAL.errors import ConnectError, DownloadDirError, DownloadFileError
+from GENERAL.errors import ConnectError, DownloadDirError, DownloadFileError
 
 TEMP_EXCEPTIONS = (
     timeout,

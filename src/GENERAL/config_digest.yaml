@@ -1,0 +1,37 @@
+include: config.yaml
+local_dir: 'C:\Дистрибутив\DESCRIPTIONS\'
+
+excel:
+  excel_path: 'c:\\Дистрибутив\\digest.xlsx'
+  default:
+    font:
+      name: Calibry
+      size: 10
+      bold: False
+# Значения по умолчанию, заданные в программе.
+# При необходимости можно изменить здесь.
+#
+#  alignment:
+#    horizontal: left
+#    vertical: top
+#    wrap_text: true
+#  columns:
+#    - key: task
+#      header: "Задача в JIRA"
+#      width: 13
+#      font:
+#         size: 11
+#    - key: components
+#      header: "Компоненты"
+#      width: 30
+#    - key: description
+#      header: "Описание"
+#      width: 30
+#      font:
+#        size: 11
+#    - key: what_changed
+#      header: "Что изменено"
+#      width: 50
+#    - key: how_changed
+#      header: "Как изменено"
+#      width: 50

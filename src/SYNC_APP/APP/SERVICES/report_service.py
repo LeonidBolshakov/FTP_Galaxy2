@@ -61,7 +61,7 @@ class ReportService:
             )
             return
 
-        console.print("[bright_yellow]Обнаружены ошибки синхронизации.[/bright_yellow]")
+        console.print("[bright_yellow]Обнаружены ошибки.[/bright_yellow]")
         return
 
     def output_report(self, console: Console, report: ReportItems) -> None:

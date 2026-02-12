@@ -27,7 +27,7 @@ from platformdirs import user_log_dir
 # ----------------------------
 
 
-class ConsoleLoggingConfig(CommonConfig):
+class ConsoleLoggingConfig(BaseModel):
     """
     Настройки логирования в консоль (loguru).
 
@@ -99,7 +99,7 @@ class LoggingConfig(BaseModel):
 # ----------------------------
 
 
-class SyncConfig(CommonConfig, BaseModel):
+class SyncConfig(CommonConfig):
     """
     Конфигурация приложения.
 

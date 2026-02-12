@@ -22,8 +22,8 @@ def mode_type(s: str) -> ModeDiffPlan:
         )
 
 
-def parse_args() -> argparse.Namespace:
-    default_config = get_default_config_path()
+def parse_args(config_name: str) -> argparse.Namespace:
+    default_config = get_default_config_path(config_name)
     p = argparse.ArgumentParser(prog="Sync_FTP_Galaxy", exit_on_error=False)
     p.add_argument(
         "--config",

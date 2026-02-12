@@ -158,6 +158,10 @@ class SyncController:
             )
         )
         general_report += report
+        if not is_validate_download:
+            return self._finalize_execution(
+                is_validate=False, general_report=general_report
+            )
 
         # Полные снимки — только для тех файлов, которые скачивали по плану.
         local_snap_after, remote_snap_after = self._get_full_snapshots_only_for(
@@ -179,20 +183,12 @@ class SyncController:
 
         general_report += report_validate
 
-        # Дополнительные проверки репозитория (поверх проверки/коммита).
-        local_dir: Path = self.runtime_context.app.local_dir
-        local_files_names = [p.name for p in Path(local_dir).iterdir() if p.is_file()]
-        report_repositoty_error = self.repository_validator.run(
-            ValidateRepositoryInput(
-                context=self.runtime_context, names=local_files_names
-            )
+        return self._finalize_execution(
+            is_validate=all(
+                [is_validate_plan, is_validate_commit, is_validate_download]
+            ),
+            general_report=general_report,
         )
-
-        general_report += report_repositoty_error
-
-        # Итоговый флаг успешности всех этапов (используется для отчёта).
-        is_validate = all([is_validate_plan, is_validate_commit, is_validate_download])
-        self.put_report(is_validate=is_validate, general_report=general_report)
 
     # -----
     #
@@ -330,3 +326,21 @@ class SyncController:
                 report=general_report,
             ),
         )
+
+    def _finalize_execution(
+            self, is_validate: bool, general_report: ReportItems
+    ) -> bool:
+        # Дополнительные проверки репозитория (поверх проверки/коммита).
+        local_dir: Path = self.runtime_context.app.local_dir
+        local_files_names = [p.name for p in Path(local_dir).iterdir() if p.is_file()]
+        report_repositoty_error = self.repository_validator.run(
+            ValidateRepositoryInput(
+                context=self.runtime_context, names=local_files_names
+            )
+        )
+
+        general_report += report_repositoty_error
+
+        # Итоговый флаг успешности всех этапов (используется для отчёта).
+        self.put_report(is_validate=is_validate, general_report=general_report)
+        return 0 if is_validate else 1

@@ -212,7 +212,6 @@ class DiffPlanner:
             denied_download = self._get_files_excluded_by_stop_list(data, result)
             result -= denied_download
 
-        print(data.context.mode_stop_list, denied_download)
         return result, denied_download
 
     def _collect_snapshots(

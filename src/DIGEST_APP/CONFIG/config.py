@@ -207,7 +207,7 @@ def normalize_columns(
 # =============================================================================
 
 
-class DigestConfig(CommonConfig, BaseModel):
+class DigestConfig(CommonConfig):
     excel: ExcelConfig
 
     @model_validator(mode="after")

@@ -73,9 +73,9 @@ def main() -> int:
     from src.GENERAL.errors import ConfigError
 
     try:
-        args = parse_args()
+        args = parse_args("config_sync.yaml")
     except ConfigError as e:
-        print(str(e))
+        print("Ошибка в параметрах программы\n", str(e))
         return 2
 
     # Быстрый выход "раз в сутки" — ДО тяжёлых импортов/инициализации/FTP
@@ -169,11 +169,11 @@ if __name__ == "__main__":
     rc = main()
 
     # CLI-пауза: позволяет прочитать вывод при ручном запуске из окна.
-    # При "пропуске" (777) пауза не нужна (типичный сценарий планировщика).
+    # При "пропуске" (777) пауза не нужна.
     if rc != 777:
         try:
             input("Для окончания работы нажмите ENTER")
-        except KeyboardInterrupt:
+        except Exception:
             pass
 
     sys.exit(rc)

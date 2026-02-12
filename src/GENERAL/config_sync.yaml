@@ -1,0 +1,39 @@
+include: config.yaml
+
+local_dir: 'C:\Дистрибутив\DESCRIPTIONS\'
+
+# --- FTP (удалённый репозиторий) ---
+ftp_root: "/pub/support/galaktika/bug_fix/GAL910/UPDATES/"  # Корень на FTP
+ftp_timeout_sec: 5  # Таймаут сетевых операций, секунды (>0)
+# Эти параметры есть в SyncConfig, но сейчас не заданы (будут взяты дефолты):
+# ftp_repeat: 3                # Количество повторов при сетевой ошибке
+# ftp_retry_delay_seconds: 1   # Пауза между повторами, секунды
+# ftp_blocksize: 65536         # Размер блока чтения при скачивании, байты
+
+# Если new_dir/old_dir не заданы — будут local_dir/NEW и local_dir/OLD
+# Можно переопределить явно (если нужно):
+# new_dir:
+# old_dir:
+
+# --- Списки файлов ---
+add_list:
+  - UPDATES.sfv   # Список "добавляемых" файлов.
+  # Эти файлы будут скачены, если будет запланирован к скачиывнию хотя бы один файл.
+
+stop_list:
+  # Файлы-исключения: то, что не должно скачиваться/обрабатываться, при включенном параметре программы
+  - Z_STAFFDOPREPORTS_RES.acd
+  - Z_STAFFREPORTS_RES.acd
+  - F_GOZREPORT_RES.acd
+  - F_TAXREPORT_RES.acd
+  - F_TBYREPORT_RES.acd
+  - F_USERREPORT_RES.acd
+  - SUPPORT_RES.acd
+  - Z_REPORT_RES.acd
+  - Z_STAFFREPORTS_RES.txt
+  - C_Tune_RES.txt
+  - Z_Calendar_RES.txt
+
+# --- Поведение (не задано — возьмутся дефолты из SyncConfig) ---
+# verify_mode: "md5_hash"       # "size" или "md5_hash"
+# date_file: "date_file"        # Служебный файл (путь)

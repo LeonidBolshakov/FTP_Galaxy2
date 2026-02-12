@@ -330,7 +330,7 @@ class TransferService:
                 self.report.append(
                     ReportItem(
                         name="",
-                        status=StatusReport.FATAL,
+                        status=StatusReport.ERROR,
                         comment="Пользователь отказался продолжать работу",
                     )
                 )

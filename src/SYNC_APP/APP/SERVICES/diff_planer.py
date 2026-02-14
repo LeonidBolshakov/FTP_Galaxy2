@@ -133,15 +133,18 @@ class DiffPlanner:
         local_names: set[str] = set(local_snaps_files)
         remote_names: set[str] = set(remote_snaps_files)
 
-        common_names, delete_names, raw_download_names = self._compute_sync_name_sets(
-            local_names, remote_names
+        common_names, raw_delete_names, raw_download_names = (
+            self._compute_sync_name_sets(local_names, remote_names)
         )
 
         # download_names — итог к скачиванию после add_list/stop_list
-        download_names, names_denied_download = self._apply_stop_list(
-            data=data,
-            raw_download_names=raw_download_names,
-            raw_remote_names=remote_names,
+        download_names, delete_names, names_denied_download = (
+            self._apply_stop_add_lists(
+                data=data,
+                raw_download_names=raw_download_names,
+                raw_delete_names=raw_delete_names,
+                raw_remote_names=remote_names,
+            )
         )
 
         # to_delete / to_download — собираем по рассчитанным именам
@@ -170,12 +173,13 @@ class DiffPlanner:
 
         return common_names, delete_names, raw_download_names
 
-    def _apply_stop_list(
+    def _apply_stop_add_lists(
         self,
         data: DiffInput,
         raw_download_names: set[str],
+            raw_delete_names: set[str],
             raw_remote_names: set[str],
-    ) -> tuple[set[str], set[str]]:
+    ) -> tuple[set[str], set[str], set[str]]:
         """Применяет add-list и stop-list к списку кандидатов на скачивание.
 
         Parameters
@@ -197,22 +201,26 @@ class DiffPlanner:
                 Имена, исключённые stop листом (будут отражены в отчёте).
         """
         if not raw_download_names:
-            return set(), set()
+            return set(), set(), set()
 
         # работаем с копией, чтобы не мутировать входной set
-        result = set(raw_download_names)
+        result_downloads = set(raw_download_names)
+        result_deletes = set(raw_delete_names)
         add_list = set(data.context.app.add_list or ())
 
-        result |= add_list & raw_remote_names
+        result_downloads |= add_list & raw_remote_names
+        result_deletes |= add_list & raw_remote_names
 
         denied_download: set[str] = (
             set()
         )  # На случай если следующие операторы не заполнят exclude
         if data.context.mode_stop_list == ModeDiffPlan.USE_STOP_LIST:
-            denied_download = self._get_files_excluded_by_stop_list(data, result)
-            result -= denied_download
+            denied_download = self._get_files_excluded_by_stop_list(
+                data, result_downloads
+            )
+            result_downloads -= denied_download
 
-        return result, denied_download
+        return result_downloads, result_deletes, denied_download
 
     def _collect_snapshots(
         self,

@@ -19,18 +19,6 @@ logging:
     level: "INFO"  # Уровень логов в файл
     name: "sync.log"
 
-class FontConfig(BaseModel):
-  name: str = "Calibri"
-  size: int = Field(default=10, gt=0)
-  bold: bool = False
-
-
-class AlignmentConfig(BaseModel):
-  horizontal: HorizontalAlignment = HorizontalAlignment.LEFT
-  vertical: VerticalAlignment = VerticalAlignment.TOP
-  wrap_text: bool = True
-
-
 # =============================================================================
 # Column + Header configs
 # =============================================================================
@@ -39,19 +27,19 @@ class AlignmentConfig(BaseModel):
 # Значения по умолчанию, заданные в программе.
 # При необходимости можно изменить здесь.
 #
-#    excel_path: "c:\\Дистрибутив\\digest.xlsx"
+#    excel_path: c:/Дистрибутив/digest.xlsx
 #    default:
 #      auto_filter: True
 #      font:
-#        name: str = "Calibri"
-#        size: int = Field(default=10, gt=0)
-#        bold: bool = False
+#        name: Calibri
+#        size: 10
+#        bold: False
 #
 #    header:
-#      bold: True — логический дефолт заголовка
 #      font:
-#        name: "Calibri"
-#        size: Field(default=10, gt=0)
+#        name: Calibri
+#        size: 10
+#        bold: True
 #  alignment:
 #    horizontal: left
 #    vertical: top

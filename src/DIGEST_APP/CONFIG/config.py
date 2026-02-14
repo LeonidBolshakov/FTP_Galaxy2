@@ -46,7 +46,6 @@ ColumnsInDefaultOrder = tuple[ColumnConfig, ...]
 
 
 class HeaderConfig(BaseModel):
-    bold: bool = True  # логический дефолт заголовка
     font: FontConfig = Field(default_factory=lambda: FontConfig(bold=True))
 
 

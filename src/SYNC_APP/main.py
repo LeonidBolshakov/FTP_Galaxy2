@@ -173,7 +173,7 @@ if __name__ == "__main__":
     if rc != 777:
         try:
             input("Для окончания работы нажмите ENTER")
-        except (KeyboardInterrupt, EOFError):
+        except (KeyboardInterrupt, Exception):
             pass
 
     sys.exit(rc)

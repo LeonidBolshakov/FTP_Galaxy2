@@ -1,6 +1,6 @@
 include: config.yaml
 
-local_dir: 'C:\Дистрибутив\DESCRIPTIONS\'
+local_dir: 'C:\Дистрибутив\PREPARE\'
 
 # --- FTP (удалённый репозиторий) ---
 ftp_root: "/pub/support/galaktika/bug_fix/GAL910/UPDATES/"  # Корень на FTP

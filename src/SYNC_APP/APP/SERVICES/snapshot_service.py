@@ -55,15 +55,15 @@ class SnapshotService:
         """
         if data.local_dir is None:
             raise RuntimeError("SnapshotService.local Параметр local_dir обязателен")
-        local_path = Path(data.local_dir)
+        local_dir = Path(data.local_dir)
 
         # Пробуем получить итератор по элементам каталога (ошибки доступа/ФС считаем конфигурационными)
         try:
-            local_dir_iter = local_path.iterdir()
+            local_dir_iter = local_dir.iterdir()
         except OSError as e:
             raise ConfigError(
-                f"{self._where('local_snap')}: Не удалось открыть file_full_path={local_path!r}.\n"
-                f"Проверьте параметр local_path и доступность директории "
+                f"{self._where('local_snap')}: Не удалось открыть {local_dir!r}.\n"
+                f"Проверьте параметр local_dir и доступность директории "
                 f"(её могли удалить/переместить или на неё нет прав).\n"
                 f"{e}"
             ) from e

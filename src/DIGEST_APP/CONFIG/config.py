@@ -1,43 +1,16 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Final, Self, TypeVar, Iterable, Mapping, Any
+from typing import Final, Self, Iterable, Mapping
 
 from pydantic import BaseModel, Field, model_validator
 
-from GENERAL.config import CommonConfig
+from GENERAL.config import CommonConfig, merge_model_defaults
 from DIGEST_APP.APP.const import (
     DigestColumnConfigKey,
     HorizontalAlignment,
     VerticalAlignment,
 )
-
-# =============================================================================
-# Base helpers
-# =============================================================================
-
-T = TypeVar("T", bound=BaseModel)
-
-
-def merge_model_defaults(base: T, override: T | dict[str, Any] | None) -> T:
-    """
-    Возвращает НОВЫЙ объект модели:
-    - override=None        -> глубокая копия base
-    - override=BaseModel  -> base + override (по заданным полям)
-    - override=dict       -> base + dict (как partial update)
-    """
-    if override is None:
-        return base.model_copy(deep=True)
-
-    if isinstance(override, BaseModel):
-        update = override.model_dump(exclude_unset=True)
-    elif isinstance(override, dict):
-        update = override
-    else:
-        raise TypeError(f"Unsupported override type: {type(override)}")
-
-    return base.model_copy(update=update, deep=True)
-
 
 # =============================================================================
 # Style configs

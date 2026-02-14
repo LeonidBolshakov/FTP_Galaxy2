@@ -3,8 +3,7 @@ from pathlib import Path
 import argparse
 
 from GENERAL.errors import ConfigError
-from SYNC_APP.APP.dto import ModeDiffPlan
-from GENERAL.get_default_config_path import get_default_config_path
+from SYNC_APP.APP.types import ModeDiffPlan
 
 _MODE_MAP = {
     "stop-list": ModeDiffPlan.USE_STOP_LIST,
@@ -22,14 +21,12 @@ def mode_type(s: str) -> ModeDiffPlan:
         )
 
 
-def parse_args(config_name: str) -> argparse.Namespace:
-    default_config = get_default_config_path(config_name)
+def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(prog="Sync_FTP_Galaxy", exit_on_error=False)
     p.add_argument(
-        "--config",
+        "config",
         type=Path,
-        default=default_config,  # ← значение по умолчанию
-        help="Путь к файлу конфигурации (по умолчанию: config_digest.yaml)",
+        help="Путь к файлу конфигурации (обязательный)",
     )
     p.add_argument(
         "--once-per-day",
@@ -38,12 +35,11 @@ def parse_args(config_name: str) -> argparse.Namespace:
     )
     p.add_argument(
         "--mode",
-        type=mode_type,
-        choices=list(_MODE_MAP.values()),
-        default=ModeDiffPlan.NOT_USE_STOP_LIST,
-        help="Режим diff-плана: stop-list (использовать stop список) | no-list (не использовать список)",
+        choices=["stop-list", "no-list"],
+        default="no-list",
+        help="Режим diff-плана: stop-list | no-list",
     )
     try:
         return p.parse_args()
     except argparse.ArgumentError as e:
-        raise ConfigError(f"Ошибка в параметрах вызова прграммы\n{e}") from None
+        raise ConfigError(f"Ошибка параметров запуска:\n{e}") from None

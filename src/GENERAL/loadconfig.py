@@ -86,5 +86,5 @@ def load_config(path: str | Path, config_cls: Type[TConfig]) -> TConfig:
     try:
         raw_data = load_yaml_with_include(cfg_path)
         return config_cls.model_validate(raw_data)
-    except ValidationError as e:
-        raise ConfigError(f"{cfg_path}\n{e}") from e
+    except (ValidationError, ValueError) as e:
+        raise ConfigLoadError(f"{cfg_path}\n{e}") from e

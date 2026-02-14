@@ -1,5 +1,23 @@
 include: config.yaml
 local_dir: 'C:\Дистрибутив\DESCRIPTIONS\'
+# --- FTP (удалённый репозиторий) ---
+ftp_root: "/pub/support/galaktika/bug_fix/GAL910/DESCRIPTIONS/"  # Корень на FTP
+# Эти параметры есть в SyncConfig, но сейчас не заданы (будут взяты дефолты):
+# ftp_repeat: 3                # Количество повторов при сетевой ошибке
+# ftp_retry_delay_seconds: 1   # Пауза между повторами, секунды
+# ftp_blocksize: 65536         # Размер блока чтения при скачивании, байты
+
+# Если new_dir/old_dir не заданы — будут local_dir/NEW и local_dir/OLD
+# Можно переопределить явно (если нужно):
+# new_dir:
+# old_dir:
+
+logging:
+  console:
+    level: "WARNING"
+  file:
+    level: "INFO"  # Уровень логов в файл
+    name: "sync.log"
 
 excel:
   excel_path: 'c:\\Дистрибутив\\digest.xlsx'
@@ -8,6 +26,8 @@ excel:
       name: Calibry
       size: 10
       bold: False
+
+
 # Значения по умолчанию, заданные в программе.
 # При необходимости можно изменить здесь.
 #

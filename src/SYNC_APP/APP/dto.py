@@ -21,8 +21,11 @@ from enum import Enum, auto
 from typing import Set, TypeAlias, Protocol
 from ftplib import FTP
 from pathlib import Path
+from SYNC_APP.APP.types import ModeDiffPlan
+from typing import TYPE_CHECKING
 
-from SYNC_APP.CONFIG.config import SyncConfig
+if TYPE_CHECKING:
+    from SYNC_APP.CONFIG.config import SyncConfig
 
 ReportItems: TypeAlias = list["ReportItem"]
 
@@ -66,12 +69,6 @@ class ModeSnapshot(Enum):
     """Режим построения снимка (snapshot)."""
     LITE_MODE           = auto()
     FULL_MODE           = auto()
-
-
-class ModeDiffPlan(Enum):
-    """Режим построения плана различий (diff plan) с учётом stop-list."""
-    USE_STOP_LIST       = auto()
-    NOT_USE_STOP_LIST   = auto()
 
 
 class ValidateCommitResult(Enum):

@@ -22,8 +22,6 @@ from contextlib import suppress
 from datetime import date
 from pathlib import Path
 
-from SYNC_APP.CONFIG.config import SyncConfig
-
 
 def _date_file_path() -> Path:
     # важно: импорт внутри — чтобы "быстрый выход" не тянул лишнее
@@ -40,7 +38,7 @@ def _already_ran_today() -> bool:
     except FileNotFoundError:
         return False
     except Exception:
-        # если файл битый/пустой/нет доступа — лучше выполнить, чем "залипнуть" навсегда
+        # если файл битый/пустой/нет доступа — лучше выполнить лишний раз выполнить программу
         return False
 
     return last == date.today().isoformat()
@@ -68,15 +66,17 @@ def main() -> int:
 
     # Разбор аргументов CLI и загрузка config c параметрами.
     # (импортируем только то, что нужно для раннего решения "запускать/не запускать")
-
     from SYNC_APP.CONFIG.config_CLI import parse_args
+
     from GENERAL.errors import ConfigError
 
     try:
-        args = parse_args("config_sync.yaml")
+        args = parse_args()
     except ConfigError as e:
         print("Ошибка в параметрах программы\n", str(e))
         return 2
+
+    from SYNC_APP.CONFIG.config import SyncConfig
 
     # Быстрый выход "раз в сутки" — ДО тяжёлых импортов/инициализации/FTP
     if getattr(args, "once_per_day", False) and _already_ran_today():
@@ -97,7 +97,7 @@ def main() -> int:
     from SYNC_APP.APP.SERVICES.repository_validator import RepositoryValidator
     from SYNC_APP.APP.SERVICES.report_service import ReportService
     from SYNC_APP.INFRA.executiongate import ExecutionGate
-    from SYNC_APP.INFRA.setup_loguru import setup_loguru
+    from GENERAL.setup_loguru import setup_loguru
     from SYNC_APP.APP.dto import (
         RuntimeContext,
         FTPInput,
@@ -173,7 +173,7 @@ if __name__ == "__main__":
     if rc != 777:
         try:
             input("Для окончания работы нажмите ENTER")
-        except Exception:
+        except (KeyboardInterrupt, EOFError):
             pass
 
     sys.exit(rc)

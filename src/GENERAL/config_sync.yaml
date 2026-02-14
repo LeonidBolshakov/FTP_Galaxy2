@@ -4,7 +4,6 @@ local_dir: 'C:\Дистрибутив\DESCRIPTIONS\'
 
 # --- FTP (удалённый репозиторий) ---
 ftp_root: "/pub/support/galaktika/bug_fix/GAL910/UPDATES/"  # Корень на FTP
-ftp_timeout_sec: 5  # Таймаут сетевых операций, секунды (>0)
 # Эти параметры есть в SyncConfig, но сейчас не заданы (будут взяты дефолты):
 # ftp_repeat: 3                # Количество повторов при сетевой ошибке
 # ftp_retry_delay_seconds: 1   # Пауза между повторами, секунды
@@ -34,6 +33,15 @@ stop_list:
   - C_Tune_RES.txt
   - Z_Calendar_RES.txt
 
-# --- Поведение (не задано — возьмутся дефолты из SyncConfig) ---
-# verify_mode: "md5_hash"       # "size" или "md5_hash"
-# date_file: "date_file"        # Служебный файл (путь)
+logging:
+  console:
+    level: "WARNING"
+  file:
+    level: "INFO"  # Уровень логов в файл
+    name: "sync.log"
+
+
+# --- Поведение (не задано — возьмётся дефолт из программы) ---
+# date_file: "date_file"
+#                           Служебный файл путь или имя.
+#                           Если задано имя, то файл пишется в директорию с LOG

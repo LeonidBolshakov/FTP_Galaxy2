@@ -46,7 +46,7 @@ ColumnsInDefaultOrder = tuple[ColumnConfig, ...]
 
 
 class HeaderConfig(BaseModel):
-    # bold=True — логический дефолт заголовка
+    bold: bool = True  # логический дефолт заголовка
     font: FontConfig = Field(default_factory=lambda: FontConfig(bold=True))
 
 
@@ -181,7 +181,7 @@ def normalize_columns(
 
 
 class DigestConfig(CommonConfig):
-    excel: ExcelConfig
+    excel: ExcelConfig = Field(default_factory=ExcelConfig)
 
     @model_validator(mode="after")
     def _finalize_excel(self) -> Self:

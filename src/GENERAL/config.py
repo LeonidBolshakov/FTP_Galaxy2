@@ -191,29 +191,19 @@ class CommonConfig(BaseModel):
     @property
     def new_dir_path(self) -> Path:
         """
-        Гарантированно возвращает путь new_dir как Path.
+        Возвращает путь new_dir как Path.
 
         Предполагается, что к моменту обращения _derive_dirs() уже установил new_dir,
         если он не был задан явно.
         """
-        return cast(Path, self.new_dir)
+        return Path(self.new_dir)
 
     @property
     def old_dir_path(self) -> Path:
         """
-        Гарантированно возвращает путь old_dir как Path.
+        Возвращает путь old_dir как Path.
 
         Предполагается, что к моменту обращения _derive_dirs() уже установил old_dir,
         если он не был задан явно.
         """
-        return cast(Path, self.old_dir)
-
-    @model_validator(mode="after")
-    def _get_dirs(self) -> Self:
-        if self.new_dir is None:
-            self.new_dir = self.local_dir / "NEW"
-
-        if self.old_dir is None:
-            self.old_dir = self.local_dir / "OLD"
-
-        return self
+        return Path(self.old_dir)

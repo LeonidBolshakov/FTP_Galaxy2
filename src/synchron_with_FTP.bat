@@ -23,8 +23,7 @@ call "%PY%" -m PyInstaller -y --log-level=ERROR "%SPEC%" --clean --noconfirm --d
 
 rem Копируем yaml рядом с exe
 copy /y %SRC_DIR%GENERAL\config_sync_prep.yaml  %OUT% >nul
-copy /y %SRC_DIR%GENERAL\config_sync_descr.yaml %OUT% >nul
-copy /y %SRC_DIR%GENERAL\config.yaml            %OUT% >nul
+copy /y %SRC_DIR%GENERAL\config_sync_descr.yaml  %OUT% >nul
 
 echo Files in: "%OUT%"
 

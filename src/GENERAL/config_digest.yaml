@@ -1,28 +1,29 @@
-include: config.yaml
-local_dir: 'C:\Дистрибутив\DESCRIPTIONS\'
-# --- FTP (удалённый репозиторий) ---
-ftp_root: "/pub/support/galaktika/bug_fix/GAL910/DESCRIPTIONS/"  # Корень на FTP
-# Эти параметры есть в SyncConfig, но сейчас не заданы (будут взяты дефолты):
-# ftp_repeat: 3                # Количество повторов при сетевой ошибке
-# ftp_retry_delay_seconds: 1   # Пауза между повторами, секунды
-# ftp_blocksize: 65536         # Размер блока чтения при скачивании, байты
+include: config_descr.yaml
 
-# Если new_dir/old_dir не заданы — будут local_dir/NEW и local_dir/OLD
-# Можно переопределить явно (если нужно):
-# new_dir:
-# old_dir:
+# --- Logging (loguru) ---
+# Все значения параметров, кроме path и name заданы в программе.
+# При желании их можно изменить здесь
+# path или name задавать обязательно.
 
 logging:
-  console:
-    level: "WARNING"
+  #  console:
+  #    level: "WARNING"   # Уровень логов в консоль
   file:
-    level: "INFO"  # Уровень логов в файл
-    name: "sync.log"
+    #    level: "DEBUG"  # Уровень логов в файл
+    #    rotation: "1 MB"  # Ротация loguru: например "1 MB", "1 day", "00:00" и т.п.
+    #    path: # Путь на файл журнализации
+    name: # Используется если path не задан
+#    format: >
+#        {time:YYYY-MM-DD HH:mm:ss} | {level:<8} |
+#        {file.path}{function}:{line} - {message}
+#    retention: "7 days"
+#    compression: "zip"
 
-# =============================================================================
-# Column + Header configs
-# =============================================================================
+# --- FTP (удалённый репозиторий) ---
 
+# -----
+# Параметры вывода в EXCEL
+# -----
 #excel:
 # Значения по умолчанию, заданные в программе.
 # При необходимости можно изменить здесь.

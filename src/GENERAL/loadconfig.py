@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import Type, TypeVar, Any
+import sys
 
 import yaml
 from pydantic import BaseModel, ValidationError
@@ -69,11 +70,20 @@ def load_yaml_with_include(path: Path, _stack: tuple[Path, ...] = ()) -> dict[st
     return merged
 
 
+def _app_dir() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent  # папка exe
+    return Path.cwd()
+
+
 def load_config(path: str | Path, config_cls: Type[TConfig]) -> TConfig:
     """
     Загружает конфигурацию из YAML-файла и валидирует её через переданный Pydantic-класс.
     """
     cfg_path = Path(path)
+
+    if not cfg_path.is_absolute():
+        cfg_path = (_app_dir() / cfg_path).resolve()
 
     if cfg_path.suffix.lower() not in {".yaml", ".yml"}:
         raise ConfigLoadError(

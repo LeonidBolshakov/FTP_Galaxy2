@@ -3,11 +3,11 @@
 
 from typing import Protocol
 
+from SYNC_APP.APP.types import ExecutionChoice
 from SYNC_APP.APP.dto import (
     RuntimeContext,
     DiffPlan,
     SnapshotInput,
-    ExecutionChoice,
     DiffInput,
     TransferInput,
     ValidateInput,

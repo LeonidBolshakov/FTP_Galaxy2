@@ -1,4 +1,5 @@
 from pathlib import Path
+import sys
 
 import argparse
 
@@ -19,6 +20,12 @@ def mode_type(s: str) -> ModeDiffPlan:
         raise argparse.ArgumentTypeError(
             f"Недопустимый режим: {s!r}. Доступно: {', '.join(_MODE_MAP)}"
         )
+
+
+def _app_dir() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent  # папка exe
+    return Path.cwd()
 
 
 def parse_args() -> argparse.Namespace:

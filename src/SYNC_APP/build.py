@@ -8,6 +8,7 @@ import sys
 
 def main() -> None:
     root = Path(__file__).resolve().parent
+    print(root)
 
     spec = root / "ftp_galaxy_2.spec"
     cfg = root / "src" / "SYNC_APP" / "CONFIG" / "config_digest.yaml"
@@ -26,7 +27,7 @@ def main() -> None:
 
     # Копируем конфиг рядом с exe (в dist)
     dist.mkdir(exist_ok=True)
-    shutil.copy2(cfg, dist / "FTP_galaxy_2" / "config_digest.yaml")
+    shutil.copy2(cfg, dist / root / cfg.name)
 
     print("Файл exe построен!")
     print(

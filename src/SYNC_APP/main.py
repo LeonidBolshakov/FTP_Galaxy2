@@ -72,6 +72,9 @@ def main() -> int:
 
     try:
         args = parse_args()
+    except SystemExit as e:
+        # argparse завершает тут (--help / -h и т.п.)
+        return int(e.code) if isinstance(e.code, int) else 0
     except ConfigError as e:
         print("Ошибка в параметрах программы\n", str(e))
         return 2

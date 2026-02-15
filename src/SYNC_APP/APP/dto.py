@@ -17,11 +17,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum, auto
 from typing import Set, TypeAlias, Protocol
 from ftplib import FTP
 from pathlib import Path
-from SYNC_APP.APP.types import ModeDiffPlan
+from SYNC_APP.APP.types import ModeDiffPlan, StatusReport, ModeSnapshot
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -65,19 +64,6 @@ class DiffPlan:
     to_download         : list[FileSnapshot]
 
 
-class ModeSnapshot(Enum):
-    """Режим построения снимка (snapshot)."""
-    LITE_MODE           = auto()
-    FULL_MODE           = auto()
-
-
-class ValidateCommitResult(Enum):
-    """Результат валидации/коммита (если используется отдельная модель результата)."""
-    SUCCESS             = auto()
-    FAILURE             = auto()
-    UNKNOWN             = auto()
-
-
 @dataclass(frozen=True)
 class FileSnapshot:
     """Снимок (метаданные) одного файла.
@@ -115,30 +101,6 @@ class RepositorySnapshot:
         Отображение: имя файла → `FileSnapshot`.
     """
     files                       : dict[str, FileSnapshot]
-
-
-class ErrorNumber(Enum):
-    """Идентификаторы ошибок/разделов отчёта (группировка сообщений)."""
-    diff_pre_files              = auto()
-    diff_download_files         = auto()
-    conflict_files              = auto()
-
-
-class ExecutionChoice(Enum):
-    """Решение `ExecutionGate`: выполнять цикл или пропустить."""
-    RUN                         = auto()
-    SKIP                        = auto()
-
-
-class StatusReport(Enum):
-    """Уровень важности/серьёзности сообщения в отчёте."""
-    INFO                        = auto()
-    IMPORTANT_INFO              = auto()
-    WARNING                     = auto()
-    ERROR                       = auto()
-    FATAL                       = auto()
-
-
 
 
 @dataclass(frozen=True)

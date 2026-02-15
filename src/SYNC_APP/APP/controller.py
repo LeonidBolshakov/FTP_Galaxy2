@@ -14,9 +14,10 @@
 
 from pathlib import Path
 
+from SYNC_APP.APP.types import ExecutionChoice
+
 from SYNC_APP.APP.dto import (
     RuntimeContext,
-    ExecutionChoice,
     DiffPlan,
     TransferInput,
     DiffInput,

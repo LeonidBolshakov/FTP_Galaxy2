@@ -630,7 +630,7 @@ class Ftp:
             # логируем и ПЕРЕБРАСЫВАЕМ
             self.ftp.close()
             logger.error("Не удалось переподключиться к FTP:\n{}", e)
-            raise
+            raise ConnectError(str(e))
 
     def close(self) -> None:
         """Корректно завершает FTP-сессию (QUIT) и закрывает соединение при необходимости."""

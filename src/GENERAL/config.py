@@ -93,11 +93,17 @@ class FileLoggingConfig(BaseModel):
             )
 
         name = self.name or "FTP.log"
+        p = self.path
 
-        log_dir = self.path.parent if self.path else default_log_dir()
-        log_dir.mkdir(parents=True, exist_ok=True)
+        if p is None:
+            self.path = default_log_dir() / name
+            return self
 
-        self.path = log_dir / name
+        if p.suffix:  # пользователь указал файл
+            return self
+
+        # иначе считаем директорией
+        self.path = p / name
         return self
 
 
@@ -134,7 +140,7 @@ class CommonConfig(BaseModel):
 
     # fmt: off
     # FTP
-    ftp_root                        : str
+    ftp_root                        : Path
     ftp_username                    : Literal["anonymous"]          = "anonymous"
     ftp_host                        : Literal["ftp.galaktika.ru"]   = "ftp.galaktika.ru"
     ftp_timeout_sec                 : PositiveFloat                 = 3

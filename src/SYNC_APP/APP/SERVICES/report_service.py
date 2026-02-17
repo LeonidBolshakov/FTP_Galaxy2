@@ -6,6 +6,7 @@
 — раскрашивает уровни статуса (`StatusReport`) через rich markup.
 """
 
+from loguru import logger
 from rich.console import Console
 from rich.table import Table
 
@@ -56,11 +57,13 @@ class ReportService:
             Элементы отчёта (ошибки/предупреждения/информационные сообщения).
         """
         if valid_commit:
+            logger.info("Синхронизация завершена. Репозитории синхронны")
             console.print(
                 "[green]Синхронизация завершена.[/green] Репозитории синхронны"
             )
             return
 
+        logger.warning("Обнаружены ошибки")
         console.print("[bright_yellow]Обнаружены ошибки.[/bright_yellow]")
         return
 

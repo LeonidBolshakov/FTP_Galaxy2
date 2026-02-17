@@ -15,7 +15,15 @@ import os
 from ftplib import FTP, error_perm, error_reply, error_temp, error_proto, all_errors
 from socket import timeout
 from time import sleep, monotonic
-from typing import TypedDict, Type, TypeVar, Callable, cast, BinaryIO, Literal
+from typing import (
+    TypedDict,
+    Type,
+    TypeVar,
+    Callable,
+    cast,
+    BinaryIO,
+    Literal,
+)
 from pathlib import Path
 from dataclasses import dataclass
 
@@ -175,6 +183,7 @@ class Ftp:
         what: str,
         err_cls: Type[E],
         temp_log: str,
+            do_reconnect: bool = True,
     ) -> T:
         """Единая обёртка для FTP-вызовов: ретраи и классификация ошибок.
 
@@ -218,8 +227,9 @@ class Ftp:
 
             except Exception as e:
                 if self._is_temporary_ftp_error(e):
-                    recon_e = self._handle_temporary_ftp_error(temp_log, e)
-                    last_error = recon_e or e
+                    if do_reconnect:
+                        recon_e = self._handle_temporary_ftp_error(temp_log, e)
+                        last_error = recon_e or e
                     self._sleep_retry_delay()
                     continue
 
@@ -244,6 +254,7 @@ class Ftp:
             what=f"подключении к FTP серверу {host!r}",
             err_cls=ConnectError,
             temp_log=f"Не удалось подключиться к {host!r}",
+            do_reconnect=False,
         )
 
     def _safe_login(self, username: str) -> None:
@@ -275,6 +286,7 @@ class Ftp:
             what=f"входе на FTP (login) как {username!r}",
             err_cls=ConnectError,
             temp_log=f"Сбой/таймаут при логине на FTP как {username!r}",
+            do_reconnect=False,
         )
 
     def connect(self) -> None:
@@ -289,10 +301,10 @@ class Ftp:
     # ---------------------------
     # Download dir_path
     # ---------------------------
-    def _safe_cwd_ftp(self, path: str) -> None:
+    def _safe_cwd_ftp(self, path: Path | str) -> None:
         """Переход на директорию с ретраями"""
         self._ftp_call(
-            lambda: self.ftp.cwd(path),
+            lambda: self.ftp.cwd(str(path)),
             what=f"переход к директории {path!r}",
             err_cls=DownloadDirError,
             temp_log=f"Сбой/таймаут при чтении директории {path!r}",

@@ -13,6 +13,7 @@
 """
 
 from pathlib import Path
+from loguru import logger
 
 from SYNC_APP.APP.types import ExecutionChoice
 
@@ -135,6 +136,7 @@ class SyncController:
         if self.execution_gate.check(self.runtime_context) == ExecutionChoice.SKIP:
             raise SkipExecute
 
+        logger.info("Начало работы")
         general_report: ReportItems = []
         new_dir = self.runtime_context.app.new_dir_path
 

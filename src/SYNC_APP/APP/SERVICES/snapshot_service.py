@@ -153,7 +153,7 @@ class SnapshotService:
 
     def _md5_hash(self, path: Path) -> str:
         """
-        Вычислить md5-хэш файла по пути `path`.
+        Вычислить md5-хэш файла по пути `cfg_path`.
 
         Читает файл блоками размера CHUNK_SIZE.
 

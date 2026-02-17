@@ -20,25 +20,17 @@
 import sys
 from contextlib import suppress
 from datetime import date
-from pathlib import Path
-
-
-def _date_file_path() -> Path:
-    # важно: импорт внутри — чтобы "быстрый выход" не тянул лишнее
-    # date_file в той же директории, что и log
-    from platformdirs import user_log_dir
-
-    log_dir = Path(user_log_dir(appname="FTP-Galaxy2", appauthor="Bolshakov"))
-    return log_dir / "date_file"
 
 
 def _already_ran_today() -> bool:
+    from SYNC_APP.INFRA.utils import date_file_path
+
     try:
-        last = _date_file_path().read_text(encoding="utf-8").splitlines()[0].strip()
+        last = date_file_path().read_text(encoding="utf-8").splitlines()[0].strip()
     except FileNotFoundError:
         return False
     except Exception:
-        # если файл битый/пустой/нет доступа — лучше выполнить лишний раз выполнить программу
+        # если файл битый/пустой/нет доступа — лучше лишний раз выполнить программу
         return False
 
     return last == date.today().isoformat()

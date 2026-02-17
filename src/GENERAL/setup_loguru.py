@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 from loguru import logger
 
@@ -111,15 +111,15 @@ def setup_loguru(
     )
     # fmt: on
 
-    file_path = cast(Path, config.app.logging.file.path)
+    log_file_path = Path(config.app.logging.file.path)
 
     try:
         # Проверяем/создаём директорию под файл лога (если это именно путь).
-        _ensure_parent_dir_for_file_sink(file_path)
+        _ensure_parent_dir_for_file_sink(log_file_path)
 
         # fmt: off
         logger.add(
-            file_path,
+            log_file_path,
             level               =config.app.logging.file.level,
             format              =config.app.logging.file.format,
             rotation            =config.app.logging.file.rotation,
@@ -131,14 +131,15 @@ def setup_loguru(
 
     except (PermissionError, FileNotFoundError, OSError, ValueError, TypeError) as e:
         # Важно: консольный sink уже включён, поэтому здесь пишем именно в лог.
-        logger.critical(
-            "Не удалось зарегистрировать файл логирования: {path!r}\n{e}",
-            path=file_path,
-            e=e,
-        )
+        # logger.critical(
+        #     "Не удалось зарегистрировать файл логирования: {cfg_path!r}\n{e}",
+        #     cfg_path=log_file_path,
+        #     e=e,
+        # )
+        pass
 
         if pause_on_file_error:
             _pause_until_user_confirms(
                 "Ошибка настройки логирования (см. сообщение выше). "
-                "Нажмите Enter, чтобы продолжить программу..."
+                "Нажмите Enter, чтобы продолжить работу программы..."
             )

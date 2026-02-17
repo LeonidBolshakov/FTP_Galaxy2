@@ -1,7 +1,7 @@
-from platformdirs import user_log_dir
 from pathlib import Path
-from typing import Literal, cast, Self, TypeVar, Any
+from typing import Literal, Self, TypeVar, Any
 
+from loguru import logger
 from pydantic_settings import SettingsConfigDict
 from pydantic import (
     model_validator,
@@ -9,7 +9,11 @@ from pydantic import (
     PositiveFloat,
     Field,
     BaseModel,
+    PrivateAttr,
+    computed_field,
 )
+
+from SYNC_APP.INFRA.utils import default_log_dir, date_file_path
 
 # =============================================================================
 # Base helpers
@@ -75,7 +79,7 @@ class FileLoggingConfig(BaseModel):
     rotation: str = "1 MB"
     format: str = (
         "{time:YYYY-MM-DD HH:mm:ss} | {level:<8} | "
-        "{file.path}{function}:{line} - {message}"
+        "{file.name}:{function}:{line} - {message}"
     )
     retention: str = "7 days"
     compression: str = "zip"
@@ -83,13 +87,17 @@ class FileLoggingConfig(BaseModel):
     @model_validator(mode="after")
     def _finalize(self) -> Self:
         if self.path is None and self.name is None:
-            raise ValueError("Для файла журнализации не задан ни path, ни name")
+            logger.warning(
+                "Параметры. Для файла логирования не заданы ни полный путь, ни имя\n"
+                "Будут использоваться значения по умолчанию"
+            )
 
-        if self.path is None:
-            log_dir = Path(user_log_dir(appname="FTP-Galaxy2", appauthor="Bolshakov"))
-            log_dir.mkdir(parents=True, exist_ok=True)
-            return self.model_copy(update={"path": log_dir / self.name})
+        name = self.name or "FTP.log"
 
+        log_dir = self.path.parent if self.path else default_log_dir()
+        log_dir.mkdir(parents=True, exist_ok=True)
+
+        self.path = log_dir / name
         return self
 
 
@@ -105,20 +113,13 @@ class LoggingConfig(BaseModel):
     console: ConsoleLoggingConfig = Field(default_factory=ConsoleLoggingConfig)
     file: FileLoggingConfig = Field(default_factory=FileLoggingConfig)
 
-    @model_validator(mode="after")
-    def _require_file_log(self) -> Self:
-        # файл-лог обязателен
-        if self.file.path is None and self.file.name is None:
-            raise ValueError("Для файла журнализации не задан ни path, ни name")
-        return self
 
+class CommonConfig(BaseModel):
     model_config = SettingsConfigDict(
         # Запрещаем неизвестные ключи в YAML, чтобы не “проглатывать” опечатки.
         extra="forbid",
     )
 
-
-class CommonConfig(BaseModel):
     local_dir: Path
 
     """
@@ -133,7 +134,7 @@ class CommonConfig(BaseModel):
 
     # fmt: off
     # FTP
-    ftp_root                        : str                           = "/pub/support/galaktika/bug_fix/GAL910/UPDATES/"
+    ftp_root                        : str
     ftp_username                    : Literal["anonymous"]          = "anonymous"
     ftp_host                        : Literal["ftp.galaktika.ru"]   = "ftp.galaktika.ru"
     ftp_timeout_sec                 : PositiveFloat                 = 3
@@ -149,8 +150,7 @@ class CommonConfig(BaseModel):
     new_dir                         : Path | None                   = None
     old_dir                         : Path | None                   = None
 
-    # Служебные файлы
-    date_file                       : Path | None                    = None
+    _date_file                      : Path=PrivateAttr()
 
     # Logging
     logging: LoggingConfig          = Field(default_factory=LoggingConfig)
@@ -178,15 +178,10 @@ class CommonConfig(BaseModel):
             self.old_dir = self.local_dir / "OLD"
         return self
 
-    @model_validator(mode="after")
-    def _derive_service_files(self) -> Self:
-        """
-        Если date_file не задан — размещаем его в директории логов.
-        """
-        if self.date_file is None:
-            log_path = cast(Path, self.logging.file.path)
-            self.date_file = log_path.parent / "date_file"
-        return self
+    @computed_field(return_type=Path)
+    @property
+    def date_file(self) -> Path:
+        return date_file_path()
 
     @property
     def new_dir_path(self) -> Path:

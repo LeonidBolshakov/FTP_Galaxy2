@@ -13,6 +13,7 @@
 import os, sys
 from typing import TypeVar, Callable, Sequence, Mapping
 from pathlib import Path
+from platformdirs import user_log_dir
 
 from GENERAL.errors import LocalFileAccessError, ConfigError
 
@@ -191,3 +192,15 @@ def name_file_to_name_component(name: str) -> str:
         stem = base
 
     return f"{stem}{suffix}"
+
+
+def default_log_dir() -> Path:
+    return Path(user_log_dir(appname="FTP-Galaxy_2", appauthor="Bolshakov"))
+
+
+def date_file_path() -> Path:
+    # важно: импорт внутри — чтобы "быстрый выход" не тянул лишнее
+    # date_file в той же директории, что и log
+
+    log_dir = default_log_dir()
+    return log_dir / "date_file"

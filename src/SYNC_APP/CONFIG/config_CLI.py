@@ -42,8 +42,8 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument(
         "--mode",
-        choices=["stop-list", "no-list"],
-        default="no-list",
+        type=mode_type,
+        default=ModeDiffPlan.NOT_USE_STOP_LIST,
         help="Режим diff-плана: stop-list | no-list",
     )
     try:

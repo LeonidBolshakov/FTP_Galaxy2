@@ -12,9 +12,9 @@ set "SPEC=%PROJECT_ROOT%news_digest.spec"
 
 rem dist надо положить в директорию вызова (текущую)
 set "CALL_DIR=%CD%"
-set "DIST=%CALL_DIR%\dist_diget"
+set "DIST=%CALL_DIR%\dist_digest"
 set "WORK=%CALL_DIR%\build"
-set "OUT=%DIST%\FTP_Galaxy_2\"
+set "OUT=%DIST%\news_digest\"
 
 rmdir /s /q "%DIST%" 2>nul
 rmdir /s /q "%WORK%" 2>nul
@@ -22,7 +22,7 @@ rmdir /s /q "%WORK%" 2>nul
 call "%PY%" -m PyInstaller -y --log-level=ERROR "%SPEC%" --clean --noconfirm --distpath "%DIST%" --workpath "%WORK%" || exit /b 1
 
 rem Копируем yaml рядом с exe (из SRC\GENERAL\)
-copy /y "%SRC_DIR%GENERAL\config_sync_descr.yaml" "%OUT%" >nul
+copy /y "%SRC_DIR%GENERAL\config_digest.yaml" "%OUT%" >nul
 copy /y "%SRC_DIR%GENERAL\config_descr.yaml" "%OUT%" >nul
 
 echo Files in: "%OUT%"

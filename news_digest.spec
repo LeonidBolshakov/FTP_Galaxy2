@@ -6,7 +6,7 @@ SRC_DIR = PROJECT_ROOT / "SRC"
 
 
 a = Analysis(
-    [str(SRC_DIR / 'SYNC_APP/main.py')],
+    [str(SRC_DIR / 'DIGEST_APP/main.py')],
     pathex=[str(SRC_DIR)],
     binaries=[],
     datas=[],
@@ -30,7 +30,7 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=True,
+    console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,

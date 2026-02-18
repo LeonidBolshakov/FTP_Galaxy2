@@ -1,4 +1,4 @@
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Literal, Self, TypeVar, Any
 
 from loguru import logger
@@ -140,7 +140,7 @@ class CommonConfig(BaseModel):
 
     # fmt: off
     # FTP
-    ftp_root                        : Path
+    ftp_root                        : PurePosixPath
     ftp_username                    : Literal["anonymous"]          = "anonymous"
     ftp_host                        : Literal["ftp.galaktika.ru"]   = "ftp.galaktika.ru"
     ftp_timeout_sec                 : PositiveFloat                 = 3

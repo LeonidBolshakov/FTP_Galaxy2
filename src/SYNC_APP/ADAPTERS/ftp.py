@@ -167,6 +167,9 @@ class Ftp:
         except Exception as recon_e:
             # Важно: не прерываем ретраи _ftp_call(), но сохраняем причину
             logger.warning("Ошибка переподключения: {}", recon_e)
+            import traceback
+
+            traceback.print_stack()
             return recon_e
 
         return None
@@ -301,13 +304,13 @@ class Ftp:
     # ---------------------------
     # Download dir_path
     # ---------------------------
-    def _safe_cwd_ftp(self, path: Path | str) -> None:
+    def _safe_cwd_ftp(self, folder: str) -> None:
         """Переход на директорию с ретраями"""
         self._ftp_call(
-            lambda: self.ftp.cwd(str(path)),
-            what=f"переход к директории {path!r}",
+            lambda: self.ftp.cwd(folder),
+            what=f"переход к директории {folder!r}",
             err_cls=DownloadDirError,
-            temp_log=f"Сбой/таймаут при чтении директории {path!r}",
+            temp_log=f"Сбой/таймаут при чтении директории {folder!r}",
         )
 
     def _safe_mlsd(self) -> list[tuple[str, MLSDFacts]]:
@@ -373,7 +376,7 @@ class Ftp:
         """
 
         # 1) Переходим в корневую директорию через безопасный вызов с ретраями
-        ftp_root = self.ftp_input.context.app.ftp_root
+        ftp_root = str(self.ftp_input.context.app.ftp_root)
         self._safe_cwd_ftp(ftp_root)
 
         # 2) Считываем содержимое директории через MLSD (возвращает name + facts)
@@ -629,7 +632,7 @@ class Ftp:
             host = self.ftp_input.context.app.ftp_host
             time_out = self.ftp_input.context.app.ftp_timeout_sec
             username = self.ftp_input.context.app.ftp_username
-            root = self.ftp_input.context.app.ftp_root
+            root = str(self.ftp_input.context.app.ftp_root)
 
             # ОДНА попытка. Без _ftp_call и без ретраев.
             self.ftp.connect(host=host, timeout=time_out)

@@ -223,10 +223,10 @@ class TransferService:
                 local_full_path=local_full_path,
             )
         except DownloadFileError as e:
-            logger.info(
-                "Файл {file} не загружен в директорию {dir}\n{e}",
+            logger.error(
+                "Файл {file} не загружен в директорию {folder}\n{e}",
                 file=file_name,
-                dir=new_dir,
+                folder=new_dir,
                 e=e,
             )
 
@@ -234,7 +234,7 @@ class TransferService:
                 ReportItem(
                     name=file_name,
                     status=StatusReport.ERROR,
-                    comment=f"Файл {local_full_path} не загружен на локальный диск\n{e}",
+                    comment=f"Файл не загружен на локальный диск\n{e}",
                 )
             )
 

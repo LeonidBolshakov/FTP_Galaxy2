@@ -29,15 +29,13 @@ class UserAbend(AppError):
 
 
 class SkipExecute(AppError):
-    exit_code = 777
     """Закончить выаолнение программы"""
+
+    exit_code = 777
 
 
 class ConfigLoadError(Exception):
     """
     Ошибка загрузки/разбора/валидации конфигурации.
-
     Используется как единый тип исключения для внешнего слоя приложения.
     """
-
-    pass

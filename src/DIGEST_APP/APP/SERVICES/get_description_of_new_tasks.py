@@ -1,4 +1,3 @@
-from typing import cast
 from pathlib import Path
 import re
 from collections.abc import Iterator
@@ -27,9 +26,12 @@ class GetDescriptionOfNewTasks:
         return result
 
     def _get_new_dir(self, ctx: RuntimeContext) -> Path:
-        return cast(Path, ctx.app.new_dir)
+        return Path(ctx.app.new_dir)
 
     def _iter_files(self, new_dir: Path) -> Iterator[Path]:
+        if not new_dir.is_dir():
+            return
+
         for file in new_dir.iterdir():
             if file.is_file():
                 yield file

@@ -1,9 +1,10 @@
 import traceback
-from GENERAL.errors import ConfigLoadError, ConfigError
+from GENERAL.errors import ConfigLoadError, ConfigError, NewDirError
 
 
 def main():
     from DIGEST_APP.APP.controller import DigestController
+    from DIGEST_APP.APP.message import show_error
     from DIGEST_APP.APP.SERVICES.get_context import GetContext
     from DIGEST_APP.APP.SERVICES.get_description_of_new_tasks import (
         GetDescriptionOfNewTasks,
@@ -23,17 +24,17 @@ def main():
     try:
         digest_controller.run()
     except ConfigLoadError as e:
-        print(f"Ошибка при загрузке параметров\n{e}")
+        show_error(f"Ошибка при загрузке параметров\n{str(e)}")
     except ConfigError as e:
-        print(f"Ошибка в параметрах:\n{e}")
-    except FileNotFoundError as e:
-        print(f"Файл не найден:\n{e}")
+        show_error(f"{str(e)}")
     except PermissionError as e:
-        print(f"❌ Excel файл открыт. Закройте его и попробуйте снова.\n{e}")
+        show_error(f"Excel файл открыт. Закройте его и попробуйте снова.\n{str(e)}")
     except OSError as e:
-        print(f"Ошибка ввода-вывода:\n{e}")
+        show_error(f"Ошибка ввода-вывода:\n{str(e)}")
+    except NewDirError as e:
+        show_error(f"{str(e)}")
     except Exception as e:
-        print(f"Неизвестная ошибка:\n{e}")
+        show_error(f"Неизвестная ошибка:\n{str(e)}")
         traceback.print_exc()
 
 

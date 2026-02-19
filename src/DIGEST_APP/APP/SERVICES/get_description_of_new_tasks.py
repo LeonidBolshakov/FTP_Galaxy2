@@ -4,6 +4,7 @@ from collections.abc import Iterator
 
 from DIGEST_APP.APP.dto import RuntimeContext, DescriptionOfNewTask
 from DIGEST_APP.APP.const import EMPTY, DigestSectionKeys, DigestSectionTitle
+from GENERAL.errors import NewDirError
 
 keys_re = "|".join(re.escape(k) for k in DigestSectionKeys.all())
 # noinspection RegExpUnnecessaryNonCapturingGroup
@@ -29,15 +30,22 @@ class GetDescriptionOfNewTasks:
         return Path(ctx.app.new_dir)
 
     def _iter_files(self, new_dir: Path) -> Iterator[Path]:
-        if not new_dir.is_dir():
+        if not new_dir.exists():
             return
+
+        print(f"{type(new_dir)=}: {new_dir=}")
+        if not new_dir.is_dir():
+            raise NewDirError(f'"{new_dir}" не директория')
 
         for file in new_dir.iterdir():
             if file.is_file():
                 yield file
 
     def _read_text(self, file: Path) -> str:
-        return file.read_text(encoding="cp1251", errors="replace")
+        try:
+            return file.read_text(encoding="cp1251", errors="replace")
+        except OSError as e:
+            raise OSError(f"Ошибка ввода файла {file.name}\n{e}") from e
 
     def _parse_file_text(
             self, text: str, file_name: Path

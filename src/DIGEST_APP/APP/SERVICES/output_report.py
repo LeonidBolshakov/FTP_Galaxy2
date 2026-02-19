@@ -12,6 +12,7 @@ from openpyxl.styles import Alignment, Font
 
 from DIGEST_APP.APP.dto import RuntimeContext, DescriptionOfNewTask
 from DIGEST_APP.CONFIG.config import FontConfig, AlignmentConfig, ColumnConfig
+from DIGEST_APP.APP.message import show_warning
 
 
 class OutputReport:
@@ -109,13 +110,18 @@ class OutputReport:
 
         excel_path = ctx.app.excel.excel_path
 
-        wb.save(excel_path)
+        try:
+            wb.save(excel_path)
+        except PermissionError as e:
+            raise PermissionError(f"{excel_path.resolve()}") from e
+        except OSError as e:
+            raise OSError(f"Сохранение файла {excel_path.resolve()}") from e
 
         path = Path(excel_path).resolve()
         try:
             self.open_file(path)
         except (AttributeError, OSError) as e:
-            print(f"Файл сформирован и находится по пути {path}\n{e}")
+            show_warning(f"Файл сформирован и находится по пути {path}\n{e}")
 
     @staticmethod
     def open_file(path: str | Path) -> bool:
@@ -132,10 +138,13 @@ class OutputReport:
             return False
 
         try:
-            if sys.platform.startswith("win"):
-                # Windows
-                os.startfile(p)  # type: ignore[attr-defined]
-                return True
+            # Windows
+            try:
+                os.startfile(p)
+            except OSError as e:
+                show_warning(f"Не удалось открыть файл\n{str(e)}")
+
+            return True
 
             if sys.platform == "darwin":
                 # macOS

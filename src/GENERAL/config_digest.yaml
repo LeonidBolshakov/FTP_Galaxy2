@@ -1,26 +1,5 @@
 include: config_descr.yaml
 
-# --- Logging (loguru) ---
-# Все значения параметров, кроме cfg_path и name заданы в программе.
-# При желании их можно изменить здесь
-# cfg_path или name задавать обязательно.
-
-logging:
-  #  console:
-  #    level: "WARNING"   # Уровень логов в консоль
-  file:
-    #    level: "DEBUG"  # Уровень логов в файл
-    #    rotation: "1 MB"  # Ротация loguru: например "1 MB", "1 day", "00:00" и т.п
-    #    cfg_path: # Путь на файл журнализации
-    name: digest.log
-#    format: >
-#        {time:YYYY-MM-DD HH:mm:ss} | {level:<8} |
-#        {file.cfg_path}{function}:{line} - {message}
-#    retention: "7 days"
-#    compression: "zip"
-
-# --- FTP (удалённый репозиторий) ---
-
 # -----
 # Параметры вывода в EXCEL
 # -----

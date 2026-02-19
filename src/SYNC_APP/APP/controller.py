@@ -138,7 +138,7 @@ class SyncController:
 
         logger.info("Начало работы")
         general_report: ReportItems = []
-        new_dir = self.runtime_context.app.new_dir_path
+        new_dir = self.runtime_context.app.new_dir
 
         # Снимки "до" (облегчённый режим: быстро и достаточно для построения плана).
         local_snap_before, remote_snap_before = self._get_lite_snapshots()

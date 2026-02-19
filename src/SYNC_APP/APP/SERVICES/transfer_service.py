@@ -159,8 +159,8 @@ class TransferService:
         """
 
         local_dir = data.context.app.local_dir
-        new_dir = data.context.app.new_dir_path
-        old_dir = data.context.app.old_dir_path
+        new_dir = data.context.app.new_dir
+        old_dir = data.context.app.old_dir
         safe_mkdir(local_dir)
         safe_mkdir(new_dir)
         safe_mkdir(old_dir)

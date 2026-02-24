@@ -1,4 +1,6 @@
 from typing import Sequence
+from copy import deepcopy
+
 from DIGEST_APP.APP.dto import DescriptionOfNewTask
 
 
@@ -11,7 +13,7 @@ class MakeGroupedDescriptions:
 
         for description in descriptions:
             if description.task not in by_task:
-                by_task[description.task] = description
+                by_task[description.task] = deepcopy(description)
             else:
                 by_task[description.task].components.append(description.components[0])
 

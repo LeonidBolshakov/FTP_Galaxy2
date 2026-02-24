@@ -20,13 +20,13 @@ class OutputReport:
             self, ctx: RuntimeContext, descriptions: list[DescriptionOfNewTask]
     ) -> None:
 
-        wb, ws = self.create_workbook_with_sheet(title="Дайджест обновлений")
-        self.pack_head(ctx, ws)
-        self.pack_info(ws, descriptions)
-        self.tune_sheet(ctx, ws)
+        wb, ws = self._create_workbook_with_sheet(title="Дайджест обновлений")
+        self._pack_head(ctx, ws)
+        self._pack_info(ws, descriptions)
+        self._tune_sheet(ctx, ws)
         self.close_worbook(ctx, wb, ws)
 
-    def create_workbook_with_sheet(self, title: str) -> tuple[Workbook, Worksheet]:
+    def _create_workbook_with_sheet(self, title: str) -> tuple[Workbook, Worksheet]:
         wb = Workbook()
         ws = wb.active
         if ws is None:
@@ -34,11 +34,11 @@ class OutputReport:
         ws.title = title
         return wb, ws
 
-    def pack_head(self, ctx: RuntimeContext, ws: Worksheet) -> None:
+    def _pack_head(self, ctx: RuntimeContext, ws: Worksheet) -> None:
         columns: Sequence[ColumnConfig] = ctx.app.excel.columns
         ws.append([c.header for c in columns])
 
-    def pack_info(
+    def _pack_info(
             self, ws: Worksheet, descriptions: list[DescriptionOfNewTask]
     ) -> None:
         for descr in descriptions:
@@ -52,14 +52,14 @@ class OutputReport:
                 ]
             )
 
-    def tune_sheet(self, ctx: RuntimeContext, ws: Worksheet) -> None:
-        self.tune_columns(ctx, ws)
-        self.add_tune_head(ctx, ws)
-        self.set_column_widths(ctx, ws)
+    def _tune_sheet(self, ctx: RuntimeContext, ws: Worksheet) -> None:
+        self._tune_columns(ctx, ws)
+        self._add_tune_head(ctx, ws)
+        self._set_column_widths(ctx, ws)
         if ctx.app.excel.default.auto_filter:
             ws.auto_filter.ref = ws.dimensions
 
-    def tune_columns(self, ctx: RuntimeContext, ws: Worksheet) -> None:
+    def _tune_columns(self, ctx: RuntimeContext, ws: Worksheet) -> None:
         columns = ctx.app.excel.columns
 
         for row in ws.iter_rows(
@@ -69,9 +69,9 @@ class OutputReport:
                 max_col=len(columns),
         ):
             for cell, col_cfg in zip(row, columns, strict=False):
-                self.tune_cell(cell, col_cfg.font, col_cfg.alignment)
+                self._tune_cell(cell, col_cfg.font, col_cfg.alignment)
 
-    def add_tune_head(self, ctx: RuntimeContext, ws: Worksheet) -> None:
+    def _add_tune_head(self, ctx: RuntimeContext, ws: Worksheet) -> None:
         header_font = ctx.app.excel.header.font
 
         for cell in ws[1]:
@@ -81,13 +81,15 @@ class OutputReport:
                 bold=header_font.bold,
             )
 
-    def set_column_widths(self, ctx: RuntimeContext, ws: Worksheet) -> None:
+    def _set_column_widths(self, ctx: RuntimeContext, ws: Worksheet) -> None:
         for i, col_cfg in enumerate(ctx.app.excel.columns, start=1):
             letter = get_column_letter(i)
             ws.column_dimensions[letter].width = col_cfg.width
 
     @staticmethod
-    def tune_cell(cell, cell_font: FontConfig, cell_alignment: AlignmentConfig) -> None:
+    def _tune_cell(
+            cell, cell_font: FontConfig, cell_alignment: AlignmentConfig
+    ) -> None:
 
         cell.font = Font(
             name=cell_font.name,
@@ -138,32 +140,14 @@ class OutputReport:
             return False
 
         try:
-            # Windows
-            try:
-                os.startfile(p)
-            except OSError as e:
-                show_warning(f"Не удалось открыть файл\n{str(e)}")
-
+            if sys.platform.startswith("win"):
+                os.startfile(path)
+            elif sys.platform == "darwin":
+                subprocess.run(["open", path])
+            elif sys.platform == "linux":
+                subprocess.run(["xdg-open", path])
+            else:
+                return False
             return True
-
-            if sys.platform == "darwin":
-                # macOS
-                subprocess.run(
-                    ["open", str(p)],
-                    check=False,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
-                return True
-
-            # Linux / Unix
-            subprocess.run(
-                ["xdg-open", str(p)],
-                check=False,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-            return True
-
         except Exception:
             return False

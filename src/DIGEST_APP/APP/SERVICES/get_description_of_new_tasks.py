@@ -36,7 +36,7 @@ class GetDescriptionOfNewTasks:
         if not new_dir.is_dir():
             raise NewDirError(f'"{new_dir}" не директория')
 
-        for file in sorted(new_dir.iterdir()):
+        for file in new_dir.iterdir():
             if file.is_file():
                 yield file
 

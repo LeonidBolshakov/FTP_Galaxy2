@@ -5,6 +5,7 @@ from DIGEST_APP.APP.SERVICES.get_description_of_new_tasks import (
     GetDescriptionOfNewTasks,
 )
 from DIGEST_APP.APP.dto import RuntimeContext
+from DIGEST_APP.APP.const import EMPTY
 from GENERAL.errors import NewDirError
 
 
@@ -25,7 +26,7 @@ def test_new_dir_is_file_raises(digest_ctx, tmp_path: Path):
 
     svc = GetDescriptionOfNewTasks()
     with pytest.raises(NewDirError):
-        assert svc.run(digest_ctx) == []
+        svc.run(digest_ctx)
 
 
 def test_parse_single_file(digest_ctx):
@@ -73,7 +74,7 @@ FTP://ftp.galaktika.ru/pub/support/galaktika/bug_fix/GAL910/PATCHMANAGER/
     assert item.components == ["ABC_9101_1954_003"]
 
 
-def test_parse_two_file(digest_ctx):
+def test_parse_two_files_order_independent(digest_ctx):
     text_1 = """
 ИНФОРМАЦИЯ ПО ОБНОВЛЕНИЮ КОМПОНЕНТА
 * ОБНОВЛЕНИЕ: ATLPICTURE_OCX_55150
@@ -123,20 +124,74 @@ FTP://ftp.galaktika.ru/pub/support/galaktika/bug_fix/GAL910/PATCHMANAGER/
     src = GetDescriptionOfNewTasks()
     descriptions = src.run(digest_ctx)
 
-    assert len(descriptions) == 2
+    by_task = {d.task: d for d in descriptions}
+    assert set(by_task) == {"ABC-2", "ABC-10"}
 
-    item = descriptions[0]
-    assert item.task == "ABC-2"
+    item = by_task["ABC-2"]
     assert item.first_solution == "NEW"
     assert item.description == "hello"
     assert item.what_has_changed == "changes"
     assert item.how_it_changed == "details"
     assert item.components == ["Q_001"]
 
-    item = descriptions[1]
-    assert item.task == "ABC-10"
+    item = by_task["ABC-10"]
     assert item.first_solution == "NEW"
     assert item.description == "tram"
     assert item.what_has_changed == "all"
     assert item.how_it_changed == "gut"
     assert item.components == ["Q_003"]
+
+
+def test_skips_non_new_solution(digest_ctx):
+    text = """
+HEADER
+* * *
+# ЗАДАЧА В JIRA: ABC-77
+* ПЕРВОЕ РЕШЕНИЕ: OLD
+# КРАТКОЕ ОПИСАНИЕ: should be skipped
+"""
+    new_dir = digest_ctx.app.new_dir
+    new_dir.mkdir(parents=True)
+    (new_dir / "ABC_77.txt").write_text(text, encoding="cp1251")
+    digest_ctx.app.new_dir = new_dir
+
+    descriptions = GetDescriptionOfNewTasks().run(digest_ctx)
+    assert descriptions == []
+
+
+def test_missing_task_sets_empty_when_new_solution(digest_ctx):
+    text = """
+HEADER
+* * *
+* ПЕРВОЕ РЕШЕНИЕ: NEW
+# КРАТКОЕ ОПИСАНИЕ: no task key
+"""
+    new_dir = digest_ctx.app.new_dir
+    new_dir.mkdir(parents=True)
+    (new_dir / "NO_TASK.txt").write_text(text, encoding="cp1251")
+    digest_ctx.app.new_dir = new_dir
+
+    descriptions = GetDescriptionOfNewTasks().run(digest_ctx)
+    assert len(descriptions) == 1
+    assert descriptions[0].task == EMPTY
+    assert descriptions[0].first_solution == "NEW"
+
+
+def test_parses_star_prefixed_keys(digest_ctx):
+    # В текстах встречаются и "#" и "*". Regex допускает оба.
+    text = """
+HEADER
+* * *
+* ЗАДАЧА В JIRA: ABC-100
+* ПЕРВОЕ РЕШЕНИЕ: NEW
+* КРАТКОЕ ОПИСАНИЕ: ok
+"""
+    new_dir = digest_ctx.app.new_dir
+    new_dir.mkdir(parents=True)
+    (new_dir / "STAR_KEYS.txt").write_text(text, encoding="cp1251")
+    digest_ctx.app.new_dir = new_dir
+
+    descriptions = GetDescriptionOfNewTasks().run(digest_ctx)
+    assert len(descriptions) == 1
+    assert descriptions[0].task == "ABC-100"
+    assert descriptions[0].description == "ok"

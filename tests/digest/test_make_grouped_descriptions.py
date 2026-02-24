@@ -33,7 +33,7 @@ def test_two_components_grouped_by_task():
     assert get_by_task(res, "E").components == ["EE"]
 
 
-def test_make_grouped_descriptions_mutates_input_objects():
+def test_make_grouped_descriptions_does_not_mutate_input_objects():
     a1 = d("A", "AA")
     a2 = d("A", "DD")
 
@@ -42,6 +42,18 @@ def test_make_grouped_descriptions_mutates_input_objects():
 
     _ = MakeGroupedDescriptions().run([a1, a2])
 
-    # Проверка на Side-effect
+    # Проверка на отсутствие side-effect
     assert a1.components == ["AA"]
     assert a2.components == ["DD"]
+
+
+def test_make_grouped_descriptions_returns_copies_for_first_occurrence():
+    a1 = d("A", "AA")
+    a2 = d("A", "DD")
+
+    res = MakeGroupedDescriptions().run([a1, a2])
+    grouped = get_by_task(res, "A")
+
+    # Внутри сервиса используется deepcopy для первого элемента группы
+    assert grouped is not a1
+    assert grouped.components is not a1.components

@@ -36,7 +36,7 @@ def make_min_ctx(tmp_path: Path) -> RuntimeContext:
     excel.header = HeaderConfig(font=FontConfig(bold=True))
 
     app = SimpleNamespace(excel=excel)
-    return RuntimeContext(app=app)  # тип DigestConfig не обязателен в рантайме
+    return RuntimeContext(app=app)
 
 
 def make_descr(task: str = "ABC-1", component: str = "Q_001") -> DescriptionOfNewTask:

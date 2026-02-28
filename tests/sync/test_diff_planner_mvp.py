@@ -8,7 +8,7 @@ from SYNC_APP.APP.types import ModeDiffPlan
 
 
 def _snap(**files: int) -> RepositorySnapshot:
-    """Helper: build RepositorySnapshot from name->size mapping."""
+    """Вспомогательная функция: строит RepositorySnapshot из отображения имя→размер."""
     return RepositorySnapshot(
         files={
             name: FileSnapshot(name=name, size=size, md5_hash=None)
@@ -75,8 +75,8 @@ def test_mismatched_size_goes_to_delete_and_download(sync_ctx):
 
 
 def test_stop_list_excludes_download_and_marks_invalid(sync_ctx):
-    # stop-list works on component name derived from file name
-    # name_file_to_name_component("AAA_123.zip") -> likely "AAA" (see infra/utils.py)
+    # stop-list работает на имени компонента, полученном из имени файла
+    # name_file_to_name_component("AAA_123.zip") -> скорее всего "AAA" (см. infra/utils.py)
     sync_ctx = sync_ctx.__class__(
         app=SimpleNamespace(add_list=[], stop_list=["AAA.zip"]),
         once_per_day=False,

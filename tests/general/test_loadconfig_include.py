@@ -61,7 +61,7 @@ def test_include_list_order_is_respected(make_yaml):
         """,
     )
 
-    # b.yaml overrides a.yaml for y; cfg.yaml overrides b.yaml for z
+    # b.yaml переопределяет a.yaml для y; cfg.yaml переопределяет b.yaml для z
     assert load_yaml_with_include(cfg) == {"x": 1, "y": 2, "z": 999}
 
 
@@ -88,13 +88,13 @@ def test_include_cycle_is_detected(make_yaml):
 
 
 def test_invalid_yaml_raises_config_error(make_yaml):
-    p = make_yaml("bad.yaml", "a: 1\n  b: 2\n")  # wrong indentation / structure
+    p = make_yaml("bad.yaml", "a: 1\n  b: 2\n")  # неправильные отступы / структура
     with pytest.raises(ConfigError):
         load_yaml_with_include(p)
 
 
 def test_load_config_validation_error_is_wrapped(make_yaml, tmp_path: Path):
-    # Minimal Pydantic model for the test
+    # Минимальная модель Pydantic для теста
     from pydantic import BaseModel
 
     class Cfg(BaseModel):

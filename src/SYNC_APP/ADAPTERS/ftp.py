@@ -360,7 +360,7 @@ class Ftp:
                     name=name, size=size, md5_hash=md5_hash
                 )
         except all_errors as e:
-            raise ConnectError(f"ошибка при чтении элементов каталога\n{e}") from e
+            raise DownloadDirError(f"ошибка при чтении элементов каталога\n{e}") from e
 
         return items
 
@@ -633,6 +633,7 @@ class Ftp:
             # ОДНА попытка. Без _ftp_call и без ретраев.
             self.ftp.connect(host=host, timeout=time_out)
             self.ftp.login(user=username, passwd="")
+            self.ftp.set_pasv(True)
 
             if root:
                 self.ftp.cwd(root)

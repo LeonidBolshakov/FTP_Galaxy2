@@ -23,20 +23,17 @@ from SYNC_APP.INFRA.utils import (
 
 MENU = (
     "[У] - Удалить содержимое директории OLD",
-    "[П] - Удалить содержимое директории OLD, я самостоятельно сохранил данные",
     "[С] - Стоп. Остановить работу",
 )
 
 
 # fmt: off
 class OldDirAction(Enum):
-    DELETE                      = auto()    # Удалить содержимое директории OLD
-    CONTINUE                    = auto()    # Продолжить работу
+    DELETE                      = auto()    # Удалить содержимое директории OLD и продолжить работу
     STOP                        = auto()    # Выходим из программы
 
 MAPPING = {
     "у": OldDirAction.DELETE,       "e": OldDirAction.DELETE,   "u": OldDirAction.DELETE,
-    "п": OldDirAction.CONTINUE,     "g": OldDirAction.CONTINUE, "p": OldDirAction.CONTINUE,
     "с": OldDirAction.STOP,         "c": OldDirAction.STOP,     "s": OldDirAction.STOP,
 }
 # fmt: on
@@ -46,6 +43,7 @@ OldDirSelector = Callable[[Path], OldDirAction]
 
 
 def interactive_old_dir_selector(_: Path) -> OldDirAction:
+    print(f"В директории OLD - {_} есть файлы.")
     return prompt_action(menu=MENU, mapping=MAPPING)
 
 
@@ -112,12 +110,6 @@ class SaveService:
             match action:
                 case OldDirAction.DELETE:
                     logger.info("Пользователь выбрал вариант удаления содержимого OLD")
-                    clean_dir(to_dir)
-
-                case OldDirAction.CONTINUE:
-                    logger.info(
-                        "Пользователь сам сохранил OLD и выбрал вариант удаления содержимого OLD"
-                    )
                     clean_dir(to_dir)
 
                 case OldDirAction.STOP:

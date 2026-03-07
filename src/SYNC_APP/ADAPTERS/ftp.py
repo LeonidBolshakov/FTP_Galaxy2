@@ -20,7 +20,6 @@ from typing import (
     Type,
     TypeVar,
     Callable,
-    cast,
     BinaryIO,
     Literal,
 )
@@ -143,7 +142,7 @@ class Ftp:
             ) from e
 
     def _handle_temporary_ftp_error(
-            self, temp_log: str, e: BaseException
+        self, temp_log: str, e: BaseException
     ) -> Exception | None:
         """Логирует временную ошибку и пытается переподключиться.
 
@@ -183,7 +182,7 @@ class Ftp:
         what: str,
         err_cls: Type[E],
         temp_log: str,
-            do_reconnect: bool = True,
+        do_reconnect: bool = True,
     ) -> T:
         """Единая обёртка для FTP-вызовов: ретраи и классификация ошибок.
 
@@ -313,7 +312,7 @@ class Ftp:
     def _safe_mlsd(self) -> list[tuple[str, MLSDFacts]]:
         """MLSD с ретраями."""
         return self._ftp_call(
-            lambda: cast(list[tuple[str, MLSDFacts]], self.ftp.mlsd()),
+            lambda: list(self.ftp.mlsd()),
             what="чтение MLSD",
             err_cls=DownloadDirError,
             temp_log="Сбой/таймаут при чтении MLSD. Проверьте есть ли MLSD на FTP сервере.",
@@ -399,7 +398,7 @@ class Ftp:
         return 0 if offset > expected_size else offset
 
     def _retrbinary_with_resume(
-            self, file_name: str, f: BinaryIO, callback: Callable[[bytes], None]
+        self, file_name: str, f: BinaryIO, callback: Callable[[bytes], None]
     ) -> str:
         """Выполняет `RETR` с поддержкой докачки через параметр `rest`.
 
@@ -420,8 +419,8 @@ class Ftp:
 
     def _download_attempt(
         self,
-            file_name: str,
-            local_full_path: Path,
+        file_name: str,
+        local_full_path: Path,
         *,
         offset: int,
     ) -> None:
@@ -455,11 +454,11 @@ class Ftp:
         return parent
 
     def _download_attempt_as_download_error(
-            self,
-            *,
-            remote_full_name: str,
-            local_full_name: Path,
-            offset: int,
+        self,
+        *,
+        remote_full_name: str,
+        local_full_name: Path,
+        offset: int,
     ) -> None:
         """Скачивает/докачивает файл и поднимает DownloadFileError при любой ошибке докачки."""
         try:
@@ -474,11 +473,11 @@ class Ftp:
             ) from e
 
     def _try_resume_after_failure(
-            self,
-            *,
-            snapshot: FileSnapshot,
-            local_path: Path,
-            cause: Exception,
+        self,
+        *,
+        snapshot: FileSnapshot,
+        local_path: Path,
+        cause: Exception,
     ) -> None:
         """Пытается выполнить докачку файла после неудачной загрузки.
 
@@ -524,7 +523,7 @@ class Ftp:
         )
 
     def _download_file_with_resume(
-            self, snapshot: FileSnapshot, local_full_path: Path, offset: int = 0
+        self, snapshot: FileSnapshot, local_full_path: Path, offset: int = 0
     ) -> None:
         """Скачиваем файл с возможной докачкой"""
         try:

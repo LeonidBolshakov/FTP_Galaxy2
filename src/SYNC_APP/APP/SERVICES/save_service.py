@@ -183,8 +183,8 @@ class SaveService:
 
     @staticmethod
     def _enshure_is_file(path: Path) -> None:
+        if not path.exists():
+            return
+
         if not path.is_file():
-            raise LocalFileAccessError(
-                f"Ошибка в списке компонент репозитория. Это не файл или файл отсутсвует.\n"
-                f"{path.name}"
-            )
+            raise LocalFileAccessError(f"Это не файл -> {path.resolve()}")

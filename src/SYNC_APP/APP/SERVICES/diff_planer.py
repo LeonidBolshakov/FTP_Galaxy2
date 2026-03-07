@@ -86,7 +86,7 @@ class DiffPlanner:
             plan
                 План действий: что удалить локально и что скачать.
             report
-                Сообщения (в основном предупреждения) по файлам, исключённым stop-list.
+                Сообщения по файлам, исключённым stop-list.
         """
         sync_plan: SyncPlan = self._build_sync_plan(data)
 
@@ -270,8 +270,8 @@ class DiffPlanner:
         Returns
         -------
         list[FileSnapshot]
-            Список файлов-«конфликтов». Для каждого создаётся новый `FileSnapshot`
-            с `size=None` и `md5_hash=None`, чтобы отметить факт несовпадения.
+            Список файлов-«конфликтов». Для каждого создаётся новый `FileSnapshot`.
+            В качестве эталона берётся remote_file_snapshots
         """
         error_items: list[FileSnapshot] = []
 
@@ -280,7 +280,7 @@ class DiffPlanner:
             remote = remote_file_snapshots[name]
 
             if local.size != remote.size:
-                error_items.append(FileSnapshot(name=name, size=None, md5_hash=None))
+                error_items.append(remote_file_snapshots[name])
 
         return error_items
 

@@ -167,9 +167,6 @@ class Ftp:
         except Exception as recon_e:
             # Важно: не прерываем ретраи _ftp_call(), но сохраняем причину
             logger.warning("Ошибка переподключения: {}", recon_e)
-            import traceback
-
-            traceback.print_stack()
             return recon_e
 
         return None

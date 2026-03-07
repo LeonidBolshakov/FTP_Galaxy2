@@ -11,7 +11,6 @@
 Ошибки "нижнего уровня" (FTP/файлы/валидация и т.п.) обычно поднимаются как доменные
 исключения внутри сервисов и обрабатываются на уровне точки входа (main.py).
 """
-
 from pathlib import Path
 from loguru import logger
 
@@ -142,7 +141,6 @@ class SyncController:
 
         # Снимки "до" (облегчённый режим: быстро и достаточно для построения плана).
         local_snap_before, remote_snap_before = self._get_lite_snapshots()
-
         plan_before, is_validate_plan, report = self.diff_planner.run(
             DiffInput(
                 context=self.runtime_context,

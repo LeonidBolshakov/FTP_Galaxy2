@@ -606,7 +606,6 @@ class Ftp:
                 err_cls=DownloadDirError,
                 temp_log=f"Сбой/таймаут при чтении XMD5 для файла {full_remote!r}",
             )
-            raise DownloadDirError()
         except DownloadDirError:
             md5_hash = None
         else:

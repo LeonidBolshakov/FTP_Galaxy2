@@ -599,18 +599,20 @@ class Ftp:
         if hash_mode == ModeSnapshot.LITE_MODE:
             return None
 
-        responses = self._ftp_call(
-            lambda: self.ftp.sendcmd(f"XMD5 {full_remote}"),
-            what=f"чтение XMD5 для {full_remote!r}",
-            err_cls=DownloadDirError,
-            temp_log=f"Сбой/таймаут при чтении XMD5 для файла {full_remote!r}",
-        )
-        parts = responses.split()
-        md5_hash = parts[-1] if parts else None
-        if md5_hash is None:
-            raise DownloadDirError(
-                f"Пустой/некорректный ответ XMD5 для {full_remote}: {responses!r}"
+        try:
+            responses = self._ftp_call(
+                lambda: self.ftp.sendcmd(f"XMD5 {full_remote}"),
+                what=f"чтение XMD5 для {full_remote!r}",
+                err_cls=DownloadDirError,
+                temp_log=f"Сбой/таймаут при чтении XMD5 для файла {full_remote!r}",
             )
+            raise DownloadDirError()
+        except DownloadDirError:
+            md5_hash = None
+        else:
+            parts = responses.split()
+            md5_hash = parts[-1] if parts else None
+
         return md5_hash
 
     def _reconnect(self) -> None:

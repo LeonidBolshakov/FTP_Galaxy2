@@ -14,6 +14,8 @@ validate_service.py
 - Возвращает (ok, report), где report — список ReportItem с ERROR/FATAL.
 """
 
+from loguru import logger
+
 from SYNC_APP.APP.dto import (
     ValidateInput,
     ReportItems,
@@ -22,10 +24,35 @@ from SYNC_APP.APP.dto import (
     FileSnapshot,
     StatusReport,
 )
+from SYNC_APP.INFRA.utils import prompt_action
+
+MENU = (
+    "[И] - Несмотря на это, считать, что контрольные суммы файлов совпадают",
+    "[Н] - Считать, что не подтверждено равенство контрольных сумм файлов",
+    "[В] - выбор [И] для этого и всех последующих файлов",
+)
+
+MAPPING = {
+    "И": "И",
+    "и": "И",
+    "B": "И",
+    "b": "И",
+    "Н": "Н",
+    "н": "Н",
+    "Y": "Н",
+    "y": "Н",
+    "В": "В",
+    "в": "В",
+    "D": "В",
+    "d": "В",
+}
 
 
 class ValidateService:
     """Сервис проверки корректности скачивания файлов в NEW по рассчитанному плану."""
+
+    def __init__(self):
+        self.warning_of_ignore_md5 = False
 
     def run(self, data: ValidateInput) -> tuple[bool, ReportItems]:
         """
@@ -172,7 +199,7 @@ class ValidateService:
                     f"Snapshot отсутствует для {name}: local={local is not None}, remote={remote is not None}"
                 )
 
-            # Порядок проверок фиксирован: сначала размер, затем контрольная сумма.
+            # Контролируем размер и контрольную сумму скаченного файла.
             for check in (self.check_size, self.check_md5_hash):
                 if (item := check(local, remote, name)) is not None:
                     result.append(item)
@@ -225,7 +252,43 @@ class ValidateService:
         if local.md5_hash is None:
             missing.append("Контрольная сумма скачанного файла отсутствует.")
         if remote.md5_hash is None:
-            missing.append("Контрольная сумма файла на FTP отсутствует.")
+            if self.warning_of_ignore_md5:
+                self.logger_ignore_md5(name=name)
+                return None
+
+            print(
+                f"На FTP сервере недоступна информация о контрольной сумме файла {name}\n"
+            )
+            match prompt_action(menu=MENU, mapping=MAPPING):
+                case "И":
+                    self.logger_ignore_md5(name=name)
+                    return None
+                case "Н":
+                    pass
+                case "В":
+                    self.logger_ignore_md5(name=name)
+                    self.warning_of_ignore_md5 = True
+                    return None
+
+            if prompt_action(menu=MENU, mapping=MAPPING) == "-":
+                missing.append("Контрольная сумма файла на FTP отсутствует.")
+        if missing:
+            return ReportItem(
+                name=name,
+                status=StatusReport.ERROR,
+                comment=" ".join(missing) + " Проверка совпадения файлов невозможна.",
+            )
+
+        l = self._norm_md5(local.md5_hash)
+        r = self._norm_md5(remote.md5_hash)
+        if l != r:
+            return ReportItem(
+                name=name,
+                status=StatusReport.ERROR,
+                comment=f"Контрольные суммы не совпадают (получено {l}, ожидалось {r})",
+            )
+        return None
+
         if missing:
             return ReportItem(
                 name=name,
@@ -258,3 +321,10 @@ class ValidateService:
         if md5 is None:
             return None
         return md5.casefold().strip()
+
+    def logger_ignore_md5(self, name: str) -> None:
+        logger.warning(
+            "На FTP сервере недоступна информация о контрольной сумме файла {name}"
+            "Несмотря на это считаем, что контрольные суммы файлов совпадают",
+            name=name,
+        )

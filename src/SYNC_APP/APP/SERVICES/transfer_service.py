@@ -108,12 +108,12 @@ class TransferService:
         """
         Выполнить перенос/скачивание файлов в NEW.
 
-        Steps:
+        Шаги:
         1) Подготовить директории local/NEW/OLD.
         2) Проиндексировать снапшоты по имени (для потенциальных проверок/санации).
         3) Если NEW не пустая — спросить действие пользователя (continue/restart/stop).
         4) Очистить/проверить содержимое NEW (удалить нулевые файлы, проверить что это файлы).
-        5) Скачать указанные снапшоты в NEW.
+        5) Скачать файлы по снапшотам в NEW.
 
         Args:
             data: TransferInput с ftp-клиентом, списком снапшотов для загрузки и контекстом путей.
@@ -126,20 +126,22 @@ class TransferService:
         ftp = data.ftp
         snapshots_for_loading = data.snapshots_for_loading
 
+        # 1) Подготовить директории local / NEW / OLD
         local_dir, new_dir, old_dir = self._prepare_official_dirs(data)
+        # 2) Проиндексировать снапшоты по имени
         schnapsots_for_loading_by_name = self._index_snapshots_by_name(
             snapshots_for_loading
         )
 
-        # Если NEW содержит файлы — требуем решение пользователя (продолжать/перезапуск/стоп).
+        # 3) Если NEW содержит файлы — требуем решение пользователя (продолжать/перезапуск/стоп).
         good = self._ensure_new_and_old_dirs_are_ready(new_dir=new_dir, old_dir=old_dir)
         if not good:
             return good, self.report
 
-        # Лёгкая “санация” NEW: в текущей версии — только проверка на “это файл” + удаление нулевых.
+        # 4) Лёгкая “санация” NEW: в текущей версии — только проверка на “это файл” + удаление нулевых.
         self._sanitize_new_dir(new_dir=new_dir)
 
-        # Скачиваем снапшоты в NEW.
+        # 5) Скачиваем файлы по снапшотам в NEW.
         self._download_files_from_snapshots(
             ftp=ftp, snapshots_to_download=snapshots_for_loading, new_dir=new_dir
         )
@@ -234,7 +236,7 @@ class TransferService:
                 ReportItem(
                     name=file_name,
                     status=StatusReport.ERROR,
-                    comment=f"Файл не загружен на локальный диск\n{e}",
+                    comment=f"Файл не загружен в директорию {new_dir}\n{e}",
                 )
             )
 

@@ -47,7 +47,7 @@ class GetDescriptionOfNewTasks:
             raise OSError(f"Ошибка ввода файла {file.name}\n{e}") from e
 
     def _parse_file_text(
-            self, text: str, file_name: Path
+        self, text: str, file_name: Path
     ) -> list[DescriptionOfNewTask]:
         descriptions = self._split_record(text)
         return self._parse_descriptions(descriptions, file_name)
@@ -67,7 +67,7 @@ class GetDescriptionOfNewTasks:
         return result
 
     def _parse_descriptions(
-            self, descriptions: list[str], file: Path
+        self, descriptions: list[str], file: Path
     ) -> list[DescriptionOfNewTask]:
 
         result: list[DescriptionOfNewTask] = []
@@ -84,7 +84,7 @@ class GetDescriptionOfNewTasks:
         return sections.get(DigestSectionTitle.FIRST_SOLUTION) == "NEW"
 
     def _build_description_task(
-            self, sections: dict[DigestSectionTitle, str], file: Path
+        self, sections: dict[DigestSectionTitle, str], file: Path
     ) -> DescriptionOfNewTask:
 
         return DescriptionOfNewTask(

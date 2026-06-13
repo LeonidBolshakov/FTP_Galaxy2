@@ -17,7 +17,7 @@ from DIGEST_APP.APP.message import show_warning
 
 class OutputReport:
     def run(
-            self, ctx: RuntimeContext, descriptions: list[DescriptionOfNewTask]
+        self, ctx: RuntimeContext, descriptions: list[DescriptionOfNewTask]
     ) -> None:
 
         wb, ws = self._create_workbook_with_sheet(title="Дайджест обновлений")
@@ -39,7 +39,7 @@ class OutputReport:
         ws.append([c.header for c in columns])
 
     def _pack_info(
-            self, ws: Worksheet, descriptions: list[DescriptionOfNewTask]
+        self, ws: Worksheet, descriptions: list[DescriptionOfNewTask]
     ) -> None:
         for descr in descriptions:
             ws.append(
@@ -63,10 +63,10 @@ class OutputReport:
         columns = ctx.app.excel.columns
 
         for row in ws.iter_rows(
-                min_row=1,
-                max_row=ws.max_row,
-                min_col=1,
-                max_col=len(columns),
+            min_row=1,
+            max_row=ws.max_row,
+            min_col=1,
+            max_col=len(columns),
         ):
             for cell, col_cfg in zip(row, columns, strict=False):
                 self._tune_cell(cell, col_cfg.font, col_cfg.alignment)
@@ -88,7 +88,7 @@ class OutputReport:
 
     @staticmethod
     def _tune_cell(
-            cell, cell_font: FontConfig, cell_alignment: AlignmentConfig
+        cell, cell_font: FontConfig, cell_alignment: AlignmentConfig
     ) -> None:
 
         cell.font = Font(
@@ -104,10 +104,10 @@ class OutputReport:
         )
 
     def close_worbook(
-            self,
-            ctx: RuntimeContext,
-            wb: Workbook,
-            ws: Worksheet,
+        self,
+        ctx: RuntimeContext,
+        wb: Workbook,
+        ws: Worksheet,
     ) -> None:
 
         excel_path = ctx.app.excel.excel_path

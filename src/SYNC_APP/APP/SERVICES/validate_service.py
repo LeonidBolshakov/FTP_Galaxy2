@@ -96,7 +96,7 @@ class ValidateService:
         return False if result else True, result
 
     def compare_undownloaded_files(
-            self, plan_set: set[str], new_dir_set: set[str]
+        self, plan_set: set[str], new_dir_set: set[str]
     ) -> ReportItems:
         """
         Найти файлы, которые планировались к скачиванию, но отсутствуют в NEW.
@@ -122,7 +122,7 @@ class ValidateService:
         return result
 
     def compare_unnecessary_files(
-            self, plan_set: set[str], new_dir_set: set[str]
+        self, plan_set: set[str], new_dir_set: set[str]
     ) -> ReportItems:
         """
         Найти «лишние» объекты в NEW, которых нет в плане скачивания.
@@ -153,11 +153,11 @@ class ValidateService:
 
     # noinspection PyArgumentList
     def compare_common_files_size_and_hash(
-            self,
-            plan_set: set[str],
-            new_dir_set: set[str],
-            local_snap: RepositorySnapshot,
-            remote_snap: RepositorySnapshot,
+        self,
+        plan_set: set[str],
+        new_dir_set: set[str],
+        local_snap: RepositorySnapshot,
+        remote_snap: RepositorySnapshot,
     ) -> ReportItems:
         """
         Проверить общие файлы (присутствуют и в плане, и в NEW) по размеру и md5.
@@ -207,7 +207,7 @@ class ValidateService:
         return result
 
     def check_size(
-            self, local: FileSnapshot, remote: FileSnapshot, name: str
+        self, local: FileSnapshot, remote: FileSnapshot, name: str
     ) -> ReportItem | None:
         """
         Проверить совпадение размера файла.
@@ -225,13 +225,13 @@ class ValidateService:
                 name=name,
                 status=StatusReport.ERROR,
                 comment=f"Размер скачанного файла {local.size} "
-                        f"не равен размеру оригинала {remote.size}",
+                f"не равен размеру оригинала {remote.size}",
             )
 
         return None
 
     def check_md5_hash(
-            self, local: FileSnapshot, remote: FileSnapshot, name: str
+        self, local: FileSnapshot, remote: FileSnapshot, name: str
     ) -> ReportItem | None:
         """
         Проверить совпадение md5 контрольных сумм.

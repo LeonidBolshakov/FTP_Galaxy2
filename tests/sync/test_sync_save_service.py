@@ -20,7 +20,7 @@ def test_enshure_is_file_raises(tmp_path) -> None:
     """
     Убедимся, что попытка передать каталог вместо файла вызывает LocalFileAccessError.
     """
-    svc = SaveService(old_dir_selector=lambda _: OldDirAction.CONTINUE)
+    svc = SaveService(old_dir_selector=lambda _: OldDirAction.DELETE)
     dir_path = tmp_path / "dir"
     dir_path.mkdir()
     with pytest.raises(LocalFileAccessError):
@@ -35,7 +35,7 @@ def test_get_parameter_returns_attr(tmp_path) -> None:
     # Создаём объект app с атрибутом local_dir
     app = SimpleNamespace(local_dir=tmp_path)
     ctx = SimpleNamespace(app=app)
-    svc = SaveService(old_dir_selector=lambda _: OldDirAction.CONTINUE)
+    svc = SaveService(old_dir_selector=lambda _: OldDirAction.DELETE)
     # Должен вернуть путь local_dir
     assert svc._get_parameter("local_dir", SaveInput(context=ctx, delete=[])) == Path(
         tmp_path
@@ -48,7 +48,7 @@ def test_get_parameter_returns_attr(tmp_path) -> None:
 def test_sure_empty_directory_actions(tmp_path) -> None:
     """
     Проверяем поведение sure_empty_directory в зависимости от выбора пользователя:
-    DELETE/CONTINUE очищают каталог, STOP вызывает UserAbend.
+    DELETE очищает каталог, STOP вызывает UserAbend.
     """
     # Создаём каталог old с файлом
     dir_old = tmp_path / "old"
@@ -56,11 +56,6 @@ def test_sure_empty_directory_actions(tmp_path) -> None:
     (dir_old / "data.txt").write_text("abc")
     # DELETE: очистка
     svc = SaveService(old_dir_selector=lambda _: OldDirAction.DELETE)
-    svc.sure_empty_directory(dir_old)
-    assert list(dir_old.iterdir()) == []
-    # Создаём новый файл и тестируем CONTINUE (тот же эффект)
-    (dir_old / "data2.txt").write_text("abc")
-    svc = SaveService(old_dir_selector=lambda _: OldDirAction.CONTINUE)
     svc.sure_empty_directory(dir_old)
     assert list(dir_old.iterdir()) == []
     # Для STOP должно быть исключение UserAbend
@@ -94,7 +89,7 @@ def test_commit_keep_new_old_dirs_moves_and_copies(tmp_path) -> None:
     # Контекст с нужными атрибутами
     app = SimpleNamespace(local_dir=local_dir, new_dir=new_dir, old_dir=old_dir)
     ctx = SimpleNamespace(app=app)
-    svc = SaveService(old_dir_selector=lambda _: OldDirAction.CONTINUE)
+    svc = SaveService(old_dir_selector=lambda _: OldDirAction.DELETE)
     report = svc.commit_keep_new_old_dirs(SaveInput(context=ctx, delete=delete_snaps))
     # Файлы из delete перемещены
     assert not (local_dir / "old1.txt").exists()
@@ -115,7 +110,7 @@ def test_copy_file_to_temp_creates_copy(tmp_path) -> None:
     """
     Проверяем, что _copy_file_to_temp создаёт копию файла в той же папке.
     """
-    svc = SaveService(old_dir_selector=lambda _: OldDirAction.CONTINUE)
+    svc = SaveService(old_dir_selector=lambda _: OldDirAction.DELETE)
     src = tmp_path / "source.txt"
     src.write_text("hello")
     temp_path = svc._copy_file_to_temp(src)

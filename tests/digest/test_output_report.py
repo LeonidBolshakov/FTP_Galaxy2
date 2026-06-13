@@ -8,7 +8,7 @@ from tests.utils import make_descriptions, read_excel_rows, create_report
 
 
 def test_creates_xlsx_with_expected_valus(
-        tmp_path: Path, monkeypatch: MonkeyPatch
+    tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
     descriptions = make_descriptions()
     ctx, excel_path = create_report(

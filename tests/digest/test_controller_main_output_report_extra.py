@@ -125,7 +125,7 @@ def test_controller_orchestrates_services_in_order(tmp_path: Path) -> None:
     ],
 )
 def test_main_shows_error_messages(
-        monkeypatch, exc_type: str, expected_substring: str
+    monkeypatch, exc_type: str, expected_substring: str
 ) -> None:
     import DIGEST_APP.main as digest_main
 

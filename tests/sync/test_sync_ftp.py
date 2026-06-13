@@ -73,7 +73,7 @@ class DummyFTP:
         pass
 
     def connect(
-            self, host: str, timeout: float
+        self, host: str, timeout: float
     ):  # pragma: no cover - поведение задаётся в тестах
         return None
 
@@ -87,7 +87,7 @@ class DummyFTP:
         return []
 
     def retrbinary(
-            self, command: str, callback, rest=None, blocksize=8192
+        self, command: str, callback, rest=None, blocksize=8192
     ):  # pragma: no cover
         return "226"
 
@@ -539,7 +539,7 @@ def test_get_hmd5_modes_and_errors():
     assert md5 == "abcdef123456"
     assert ftp.sent[-1].startswith("XMD5")
 
-    # Неправильный/пустой ответ приводит к DownloadDirError
+    # Недоступная контрольная сумма не прерывает построение снимка
     class FTPBadXMD5(DummyFTP):
         def sendcmd(self, cmd: str) -> str:  # noqa: D401
             return ""  # пустая строка
@@ -547,8 +547,7 @@ def test_get_hmd5_modes_and_errors():
     ftp_bad = FTPBadXMD5()
     ftp_input2 = _make_dummy_ftp_input(ftp_bad)
     client2 = Ftp(ftp_input2)
-    with pytest.raises(DownloadDirError):
-        client2._get_hmd5("file.txt", ModeSnapshot.FULL_MODE)
+    assert client2._get_hmd5("file.txt", ModeSnapshot.FULL_MODE) is None
 
 
 def test_reconnect_failure():

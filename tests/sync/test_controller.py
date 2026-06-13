@@ -120,7 +120,7 @@ def test_controller_runs_full_cycle(tmp_path):
     # Запускаем контроллер и проверяем успешный статус.
     result = controller.run()
     assert (
-            result == 0
+        result == 0
     ), "Ожидалось, что контроллер вернёт код успеха (0), когда все этапы прошли успешно."
 
     # Verify the sequence of method calls matches the expected orchestrator flow.
@@ -142,5 +142,5 @@ def test_controller_runs_full_cycle(tmp_path):
     # Extract only the call names from the recorded calls list.
     actual_call_order = [name for name, _ in calls]
     assert (
-            actual_call_order == expected_call_order
+        actual_call_order == expected_call_order
     ), f"Unexpected call sequence: {actual_call_order}"

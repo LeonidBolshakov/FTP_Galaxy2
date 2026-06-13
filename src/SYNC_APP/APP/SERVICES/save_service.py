@@ -88,7 +88,7 @@ class SaveService:
         return report
 
     def _move_files(
-            self, list_files: list[FileSnapshot], from_dir: Path, to_dir: Path
+        self, list_files: list[FileSnapshot], from_dir: Path, to_dir: Path
     ) -> int:
         sure_same_drive(from_dir, to_dir)
         self.sure_empty_directory(to_dir)
@@ -121,7 +121,7 @@ class SaveService:
                     assert_never(action)
 
     def _replace_files(
-            self, list_file_snaps: list[FileSnapshot], from_dir: Path, to_dir: Path
+        self, list_file_snaps: list[FileSnapshot], from_dir: Path, to_dir: Path
     ) -> int:
 
         count_files = 0

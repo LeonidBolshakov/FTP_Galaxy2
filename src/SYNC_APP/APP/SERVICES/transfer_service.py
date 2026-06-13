@@ -169,7 +169,7 @@ class TransferService:
         return local_dir, new_dir, old_dir
 
     def _index_snapshots_by_name(
-            self, snapshots: list[FileSnapshot]
+        self, snapshots: list[FileSnapshot]
     ) -> dict[str, FileSnapshot]:
         """
         Проиндексировать снапшоты по имени файла.
@@ -186,7 +186,7 @@ class TransferService:
         return {snap.name: snap for snap in snapshots}
 
     def _download_files_from_snapshots(
-            self, ftp: Ftp, snapshots_to_download: list[FileSnapshot], new_dir: Path
+        self, ftp: Ftp, snapshots_to_download: list[FileSnapshot], new_dir: Path
     ) -> None:
         """
         Скачать список файлов по снапшотам.
@@ -202,7 +202,7 @@ class TransferService:
             )
 
     def _download_file_from_snapshot(
-            self, ftp: Ftp, snapshot: FileSnapshot, new_dir: Path
+        self, ftp: Ftp, snapshot: FileSnapshot, new_dir: Path
     ) -> None:
         """
         Скачать один файл, описанный снапшотом.

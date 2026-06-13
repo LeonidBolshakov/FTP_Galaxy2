@@ -70,9 +70,9 @@ def _pause_until_user_confirms(message: str) -> None:
 
 
 def setup_loguru(
-        config: RuntimeContext,
-        *,
-        pause_on_file_error: bool = True,
+    config: RuntimeContext,
+    *,
+    pause_on_file_error: bool = True,
 ) -> None:
     """Инициализирует Loguru на основе настроек приложения.
 

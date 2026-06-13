@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ftp-galaxy2"
+version = "0.1.0"
+description = "CLI tools for synchronizing an FTP repository and generating Excel release digests"
+readme = "README.md"
+requires-python = ">=3.14"
+keywords = ["ftp", "synchronization", "cli", "excel", "automation"]
+dependencies = [
+  "loguru>=0.7.3",
+  "openpyxl>=3.1.5",
+  "pydantic>=2.12.5",
+  "pydantic-settings>=2.12.0",
+  "PyYAML>=6.0.3",
+  "rich>=14.3.2",
+]
+
+[project.optional-dependencies]
+dev = [
+  "coverage>=7.10",
+  "pytest>=9.0",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[project.scripts]
+digest = "DIGEST_APP.main:main"
+sync = "SYNC_APP.main:main"

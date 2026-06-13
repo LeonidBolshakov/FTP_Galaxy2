@@ -1,0 +1,14 @@
+local_dir: "./data/descriptions"
+
+excel:
+  excel_path: "./output/digest.xlsx"
+  default:
+    auto_filter: true
+    font:
+      name: "Calibri"
+      size: 10
+  header:
+    font:
+      name: "Calibri"
+      size: 10
+      bold: true

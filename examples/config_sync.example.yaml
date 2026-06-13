@@ -1,0 +1,21 @@
+local_dir: "./data/repository"
+new_dir: "./data/repository/NEW"
+old_dir: "./data/repository/OLD"
+
+ftp_host: "ftp.galaktika.ru"
+ftp_username: "anonymous"
+ftp_root: "/pub/example/"
+ftp_timeout_sec: 3
+ftp_repeat: 3
+ftp_retry_delay_seconds: 1
+ftp_blocksize: 65536
+
+stop_list: []
+add_list: []
+
+logging:
+  console:
+    level: "INFO"
+  file:
+    path: "./logs"
+    name: "sync.log"
